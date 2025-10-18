@@ -1,0 +1,356 @@
+---
+title: "STAT380_HW8"
+author: Jackie Yang
+output: html_document
+date: "Due: Complete prior to exam on Wednesday, April 9. This assignment will not be collected since you will receive answers prior to due date."
+---
+
+## Instructions
+
+In class, we covered two methods for classification: kNN classification and logistic regression. The activities that follow are meant to provide further practice with these concepts. NOTE: All required `library` commands **must be** included in the Front Matter section. If you include your `library` commands elsewhere in your code, you will be penalized.
+
+At the conclusion to the activity, you do **not** need to upload any files.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter - Clean Environment, Load Libraries, User Defined Functions
+
+```{r}
+rm(list = ls())
+#Add libraries as needed
+library(tidyverse)
+library(FNN)
+library(pROC)
+```
+
+## Problem 1. Conceptual/Vocabulary Questions
+
+##### a. Explain the difference between supervised and unsupervised learning.
+
+The distinction lies in whether or not there is a response/y/output/label variable. In supervised learning, there is a known response/y/output/label variable that we are trying to predict, while in unsupervised learning, there is $\textbf{not}$ a known response/y/output/label variable.
+
+##### b. Explain the difference between regression and classification.
+
+Regression and classification are two common tasks that fall under the umbrella of supercised learning. The difference between these tasks is based on the nature of the response variable (i.e., the variable that we are trying to predict, i.e., the y variable). When the response is categorical, the problem is called a classification problem. When the response is quantitative (and usually continuous), the problem is a regression problem.
+
+##### c. What are the advantages and disadvantages of the validation (holdout) set approach?
+
+Some advantages:
+1. Helps to protect from overfitting the model.
+2. Not as computationally demanding as other methods since we only build the model one time.
+
+Some disadvantages:
+1. The random training/validation split can have a big impact on the results, particularly for small datasets.
+
+##### d. What are the advantages and disadvantages of the k-fold cross validation approach?
+
+Some advantages:
+1. k-fold cross validation reduces the effect of a single random split, especially in the case of small datasets.
+2. Every data point observation is used both as a training point (k-1 times) and as a validation point (once).
+
+Some disadvantages:
+1. More computationally demanding than the validation (holdout) set approach. (We essentially perform the training/validation split and model building k times during k-fold cross validation instead of once.)
+
+##### e. Suppose you are given a dataset and asked to choose between using a multiple linear regression model and a logistic regression model. Explain how you would pick between these models.
+
+The distinction lies in the nature of the response variable. Logistic regression is used when the response variable is a binary categorical variable. Multiple linear regression is used when the response variable is quantitative instead of categorical.
+
+\
+
+*For the remaining problems, use the following storyline.*
+
+A spam filter represents a classic classification problem. An email comes arrives and the filter must decide whether the email or spam or not based on characteristics of the email. The dataset `spambase.txt` contains information on a collection of emails. More information about the dataset may be found at: http://archive.ics.uci.edu/ml/datasets/spambase
+
+The dataset consists of 57 numeric variables and 1 target (response) variable. The last column (`V58`) denotes whether the email was considered spam (1) or not (0). Most of the attributes (input variables) indicate whether a particular word or character was frequently occurring in the e-mail. For example, the 24th variable (`V24`) represents the percentage of words in the email that contain the sequence ‘money’. Details can be found in the file `spambase.names.txt`. NOTE: `spambase.names.txt` should be opened in Notepad (on Windows machine) or TextEdit (on Mac). Opening `spambase.names.txt` in R isn’t likely to be helpful since it is not formatted as a dataset.
+
+Our goal is to predict whether an email is spam based on the characteristics of the email.
+
+
+## Problem 2. Spam Data - Data Preparation
+
+##### a. Read in the dataset. How many observations (rows) and variables (columns) does the dataset contain? 
+
+```{r}
+#Read in dataset
+spam <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/spambase.txt", header=FALSE)
+
+#Display the dimensions (rows x columns)
+dim(spam)
+```
+
+There are 4601 observations and 58 variables.
+
+##### b. Are there missing value in the dataset? Include code that allowed you to arrive at this conclusion.
+
+```{r}
+#Determine the number of NA's in each variable
+apply(spam, 2, function(x) sum(is.na(x)))
+
+#Determine the range (minimum and maximum) for each variable
+apply(spam, 2, range)
+```
+
+There are no missing values. Below is code I used to check for NA'. Although we haven't covered this in class, the last argument to the apply function (`function(x) sum(is.na(x))`) makes use of an "anonymous" function. Basically, this means I did not name the function and store it as an object as we did with the `CountNA` function in the notes. Instead, the function only exists for that one line of code. I also examined the range of values (using the `range` function to watch out for bizarre values like -999 or other such values that might indicate missing data.) The results of the `range` function also show is that the variables are or different scales (e.g., `V57` compared `V11`) so scaling will be necessary for anything that is distance based.
+
+##### c. What proportion of observations in the dataset are labeled as spam?
+
+```{r}
+prop.table(table(spam$V58))
+```
+
+Find the proportion of values that are `1` in the `V58` column. The proportion of spam emails is 0.394
+
+##### d. Standardize all input variables to have a mean of 0 and a standard deviation of 1. This does not include the response variable. NOTE: If you call the scale function on a matrix, it will scale all of the columns so that you do not have to do them one at a time. HINT: You may want to try using `xvars <- names(spambase)[-58]` to get and store the names of the input/x variables in the `xvars` vector.
+
+```{r}
+#Method based on how we have been doing this
+xvars <- names(spam)[-58] #Remove 58th variable's name from list of x-variables because the 58th variable is the response
+
+#Scale the x variables to have a mean of 0 and standard deviation of 1
+spam[ , xvars] <- scale(spam[ , xvars], center = TRUE, scale = TRUE)
+```
+
+```{r, eval = FALSE}
+#Alternative method - remove eval = FALSE if you wish to use
+xvars <- 1:57 #These are the column numbers rather than the column names
+spam[ , xvars] <- scale(spam[ , xvars], center = TRUE, scale = TRUE)
+```
+
+
+##### e. Using a seed of 321, perform an 80/20 training/validation split.
+
+- NOTE: The current version of R (which is different from RStudio) is 4.3.1. If your version of R is \< 3.6.0, you should either update R or run your .Rmd file on a lab computer that has a version \>= 3.6.0. Failure to follow this instruction will make your remaining answers incorrect.
+
+```{r}
+set.seed(321)
+train_ind <- sample(1:nrow(spam), floor(0.8 * nrow(spam)))
+set.seed(NULL)
+
+Train <- spam[train_ind, ]
+Validation <- spam[-train_ind, ]
+```
+
+
+## Problem 3. Implement logistic regression for predicting spam
+
+We wish to compare two models (logistic regression and *k*-nearest neighbors) for predicting whether an email is spam. Using the scaled inputs created in Problem 2, we will build the models and compare their ability to generalize to new data using the the accuracy.
+
+##### a. Using V1-V57 as the input variables, build a logistic regression model predicting the probability that an email is spam using the training data. NOTE: If you receive the warning message: `Warning message: glm.fit: fitted probabilities numerically 0 or 1 occurred`, you may ignore it for this problem.
+
+ - Generally speaking, you do not have to scale the inputs for a logistic regression model; however, whether the inputs are scaled or not does not affect the predictions. (It only affects the interpretations of coefficients.)
+ - In general, you should **not** ignore warning messages. They should always be investigated.
+ - This particular warning message occurs in the case of complete separation (our model perfectly distinguishes between successes and failures) or for other situations in which some predicted probabilities are extremely close to 0 or 1. For this dataset, the issue is caused by outliers. You can read more about this in the solutions.
+ 
+NOTE: THe `.` shown in the model declaration `V58 ~ .` tells R to use all variables in the Train dataset (other than `V58`) as the inputs/X's for this model.
+ 
+```{r}
+#Build the logistic regression model
+model_log <- glm(V58 ~ ., family = binomial, data = Train)
+
+#Display a summary of the model
+summary(model_log)
+```
+
+Investigation of warning message
+
+```{r}
+#Find the predicted probabilities for Training data
+predProbTrain <- predict(model_log, newdata = Train, type = "response")
+
+#Add predicted probabilities to a copy of Train and sort the probabilties to be in descending order
+TrainTemp <-
+  Train %>%
+  mutate(p = predProbTrain) %>%
+  arrange(desc(p))
+
+#View 1st 6 observations
+head(TrainTemp)
+```
+
+We can see that some observations have predicted probabilities of 1 (by examining the `p` column, which is the last column in the dataset). These are likely due to outliers. For instance, the first observation in the sorted dataset has values of 50.98 and 16.1 for `V56` and `V57`, respectively. Since we have standardized the dataset, these are z-scores which means that the observed value of `V56` is nearly 51 standard deviations above the mean, while the observed value of `V57` is nearly more than 16 standard deviations above the mean. These are EXTREME! (Remember that for a symmetric distribution, we would expect 99.7% of observations to be within 3 standard deviations. Even for a skewed distribution, 51 standard deviations if extreme.) The second observation in the sorted dataset is extreme in `V4` and so on. Basically, these outliers are so extreme that the model is producing predicted probabilities that are within machine precision of 0 or 1. This is the reason for the error message. Realistically, we might investigate these further and decide whether or not they should be included in the analysis. For this problem, we will ignore the warning.
+
+##### b. Based on the validation data and a classification threshold of 0.5, create the confusion matrix. Be sure to specify whether the rows represent predictions or the truth.
+
+```{r}
+#Find the predicted probabilities
+pred_prob <- predict(model_log, newdata = Validation, type = "response")
+
+#Establish the threshold
+threshold <- 0.5
+
+#Find the predicted classes by comparing predicted probabilities to threshold
+pred_spam <- ifelse(pred_prob > threshold, 1, 0)
+
+#Create the confusion matrix
+table(pred_spam, Validation$V58)
+```
+
+
+##### c. What is the accuracy of the spam filter based on the confusion matrix in b.? NOTE: Although you may find a function to calculate this for you, be sure you could do it by hand. On the exam, I am likely going to ask you to find some probabilities (such as accaracy, sensitivity, etc.) based on a confusion matrix.
+
+The accuracy is 0.925. THe calculation is given by:
+$$\text{accuracy} = \frac{TP + TN}{TP + FP + TN + FN} = \frac{298 + 554}{268 + 32 + 554 + 37} \approx 0.925$$
+
+##### d. What is the false discovery rate based on the confusion matrix in b.? (See Wikipedia page linked in the notes for the formula.)
+
+The false discovery rate is 0.097. The calculation is given by:
+$$\text{false discovery rate} = \frac{FP}{FP + TP} = \frac{32}{32 + 298} \approx 0.097$$
+
+##### e. What happens to the accuracy of the spam filter if we decrease the classification threshold to 0.3? What happens to the false discovery rate? 
+
+```{r}
+#NOTE: It is not necessary to regenerate the predicted probabilites. The chosen threshold does not affect the probabilities. The threshold only plays a role when deciding on span or not
+
+#Establish the threshold
+threshold <- 0.3
+
+#Find the predicted classes by comparing predicted probabilities to threshold
+pred_spam <- ifelse(pred_prob > threshold, 1, 0)
+
+#Create the confusion matrix
+table(pred_spam, Validation$V58)
+```
+
+We can see that the accuracy becomes 0.903. The calculation is given by:
+$$\text{accuracy} = \frac{TP + TN}{TP + FP + TN + FN} = \frac{317 + 515}{317 + 71 +515 + 18} \approx 0.903$$
+
+The false discovery rate becomes 0.183. The calculation is given by:
+$$\text{false discovery rate} = \frac{FP}{FP + TP} = \frac{71}{71 + 317} \approx 0.183$$
+
+Summary: Accuracy has a small drop, but the false discovery rate nearly doubles.
+
+##### f. We can eliminate false positives altogether if we just label everything as 0 (‘not spam). For the case in which all emails in Validation are classified to be ‘not spam’ (i.e., the filter does nothing), produce the confusion matrix. 
+
+```{r}
+#Make all predictions 0
+pred_spam <- rep(0, nrow(Validation))
+
+#Create the confusion matrix
+table(pred_spam, Validation$V58)
+```
+
+There are many ways to make the predictions a vector of 0's. Since to the `rep` (replicate function) function we used for initializing a vector before a loop, I will use the `rep` function; however, instead of repeating `NA` a given number of times, I will repeat `0` a given number of times. The number of times that we should use is equal to the number of rows in the Validation. This way, we are getting a prediction of - for each row of the Validation set. The confusion matrix and calculations follow.
+
+NOTE: The confusion matrix now has only onw row since all predictions were 0. The row not shown in the table corresponds to predictions of `1`. (In your mind you can pretend that the missing row is present but the values in the cells are 0's)
+
+##### g. How does the accuracy of the spam filter in f. compare to the accuracy of the filter in c.? 
+
+We can see that the accuracy becomes 0.636. The calculation is given by:
+$$\text{accuracy} = \frac{TP + TN}{TP + FP + TN + FN} = \frac{0 + 586}{0 + 0 + 586 + 335} \approx{0.636}$$
+
+This is substantially lower than the accuracy found in part c.
+
+##### h. Summarize the effectiveness of logistic regression across all thresholds by creating the Receiver Operating Characteristic (ROC) curve and reporting the area under the curve (AUC). 
+
+```{r}
+#Create ROC curve - Be sure that the curve is generated for the Validation
+rocVal <- roc(response = Validation$V58,
+              predictor = pred_prob,
+              plot = TRUE, print.auc = TRUE,
+              legacy.axes = TRUE)
+
+as.numeric(rocVal$auc)
+```
+
+
+##### i. Based on the value for AUC, do you think this is a good model for predicting whether an email is spam?
+
+Based on the AUC (0.978), the model has worked well. Remember an AUC of 0.5 is no better than random guessing. As we get further away from 0.5 and closer to 1, the model is doing better and better.
+
+## Problem 4. Implement kNN for predicting spam
+
+##### a. Implement kNN classification using all 57 input variables. Use values of k ranging from 1 to 50. Create a plot showing the values of k (x) vs accuracy (y) for predictions on the validation data. NOTE: Using knn from FNN, it took about 30 seconds to run on my computer. 
+
+```{r}
+#Data Prep
+#This includes creating indicators, scaling X's, and training/testing split. These steps were already completed
+
+#Set up for loop
+maxK <- 50
+acc_vec <- rep(NA, maxK)
+
+#Loop through calues for NN
+for(i in 1:maxK){
+  #Build model
+  knn_res <- knn(train = Train[ , xvars, drop = FALSE],
+                 test = Validation[ , xvars, drop = FALSE],
+                 cl = Train$V58,
+                 k = i)
+  
+  #This could be skipped, but I have included it to be consistent with notes
+  Validation <- Validation %>% mutate(pred_spam = knn_res)
+  
+  #Find and store accuracy
+  acc_vec[i] <- mean(Validation$pred_spam == Validation$V58)
+}
+
+#Create plot
+temp_df <- data.frame(k = 1:maxK, accuracy = acc_vec)
+
+ggplot(data = temp_df, mapping = aes(x = k, y = accuracy)) +
+  geom_line() + 
+  labs(x = "Number of Nearest Neighbors",
+       y = "Accuracy") + 
+  geom_point(data = temp_df[which.max(acc_vec), ],
+             color = "red",
+             size = 3,
+             shape = 1)
+```
+
+This is similar to what we did in an earlier HW assignment for kNN regression; however, since this is knn classification, we are no longer using RMSE. We are now going to use the accuracy. Further, instead of $\textbf{MINIMIZING}$ RMSE, we want to $\textbf{MAXIMIZE}$ accuracy. So, we are looking for a point on the plot that has the highest value for the vertical axis (accuracy).
+
+##### b. Which value of k produces the highest accuracy? 
+
+k = 4
+
+##### c. What is the accuracy found in 4b.
+
+The accuracy is 0.919
+
+##### d. Which method worked better: a) logistic regression with a threshold of 0.5 or b) kNN with k being the value found in 4b.? 
+
+Based on the accuracy, logistic regression with a threshold of 0.5 worked slightly better, but it is close (0.925 vs. 0.919).
+
+## Problem 5. Spam - Random Inference Question
+
+##### a. How does `V24` (percentage of words in email containing sequence 'money') affect odds of being spam? To answer this, build a logistic regression model for predicting `V58` using `V24` using the full dataset (not the Train). Do **not** standardize the inputs. Then, interpret the slope associated with `V24`.  
+
+```{r}
+#Read in dataset
+spam <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/spambase.txt", header=FALSE)
+
+#Build Model
+model5a <- glm(V58 ~ V24, family = binomial, data = spam)
+
+summary(model5a)
+
+#Exponentiate the coefficient for V24, which is the 2nd estimated coef.
+exp(coef(model5a)[2])
+```
+
+As the percentage of words containing the sequence `money` increases by 1%, we expect the odds of being spam to change by a factor of $e^{4.714} \approx 111.546$.
+
+##### b. How does `V24` (percentage of words in email containing sequence 'money') affect odds of being spam after controlling for `V1`, `V2`, ..., `V10`? To answer this, build a logistic regression model for predicting `V58` using `V1`, `V2`, ..., `V10`, and `V24` using the full dataset (not the Train). Do **not** standardize the inputs. Then, interpret the slope associated with `V24`. 
+
+NOTE: Some things that did not show up on this HW that might show up on the exam. If I give you logistic regression output from R, you should be able to use it to answer questions. Write the estimated equation, use the equation predict logit and/or probability, use probability and a threshold to make a classification, determine if something is true positive, true negative, etc.
+
+```{r}
+#Build Model
+model5b <- glm(V58 ~ V1 + V2 + V3 + V4 + V5 + V6 + V7 + V8 + V9 + V10 + V24,
+               family = binomial, data = spam)
+
+summary(model5b)
+
+#Exponentiate the coefficients for V24, which is the 12th estimated coef.
+exp(coef(model5b)[12])
+```
+
+This is similar to 5a; however, the terminology "after controlling for..." means that we must also include those other variables in the model. We will have to adjust the interpretation to include the assumption that the other variables are included and not changing.
+
+
+
+As the percentage of words containing the sequence `money` increases by 1%, we expect the odds of being spam to change by a factor ot $e^{2.759} \approx{15.791}$, assuming the variables `V1`, `V2`, ... , `V10` are held constant.
+
+NOTE: Some things that did not show up on this HW that might show up on the exam. If I give you logistic regression output from R, you should be able to use it to answer questions. Write the estimate equation, use the equation to predict logit and/or probability, use probability and a threshold to make a classification, determine if something is true positive, true negative, etc.
