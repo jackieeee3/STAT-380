@@ -1,0 +1,219 @@
+---
+title: "Mini Project 2"
+author: "Jackie Yang & Xinyu Xie"
+date: "2025-04-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter
+```{r}
+rm(list = ls())
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(tidyr)
+library(lubridate)
+library(kableExtra)
+
+CODGames2_mp <- read_excel("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames2_mp.xlsx")
+head(CODGames2_mp)
+```
+
+## Task 1 - na.omit()
+
+```{r}
+CODGames2_mp$NA_count <- rowSums(is.na(CODGames2_mp))
+CODGames2_mp$NA_count
+```
+
+We should avoid using na.omit() to remove observations (rows) with missing data for this dataset because every row contains NA's. If we used this function, our dataset would be empty.
+
+## Task 2 - Explore 5 More Variables
+
+### Plot 1 - Date (Categorical)
+
+```{r}
+sum(is.na(CODGames2_mp$Date))
+
+CODGames2_mp <- CODGames2_mp %>%
+  mutate(Week = floor_date(as.Date(Date), "week"))
+
+week_counts <- table(CODGames2_mp$Week, useNA = "ifany")
+week_proportions <- prop.table(week_counts)
+
+week_df <- data.frame(
+  Week = names(week_counts),
+  Count = as.numeric(week_counts),
+  Proportion = as.numeric(week_proportions)
+) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+week_df
+
+CODGames2_mp$Date <- as.Date(CODGames2_mp$Date)
+
+CODGames2_mp %>%
+  mutate(Week = lubridate::floor_date(Date, "week")) %>%
+  count(Week) %>%
+  ggplot(aes(x = Week, y = n)) +
+  geom_col(fill = "darkolivegreen2", color = "black") +
+  theme_minimal() +
+  labs(title = "Weekly Distribution of Games", 
+       x = "Week", 
+       y = "Count") +
+  scale_x_date(date_labels = "%b %d, %Y", date_breaks = "2 weeks") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+We analyzed the variable Date, which ranged from the beginning of June to the end of August. By looking at the histogram, it seems like the player played the most games during the week of June 13th and the week of July 11th, where the player played 40 times and 38 times respectively which takes up around 19% and 18% of total games played. Summing the NA's we found that there are zero missing data points.
+
+### Plot 2 - Damage (Quantitative)
+
+```{r}
+summarize(CODGames2_mp, 
+             N = n(),
+             Na = sum(is.na(Damage)),
+             Mean = mean(Damage , na.rm = TRUE),
+             SD = sd(Damage , na.rm = TRUE),
+             Min = min(Damage , na.rm = TRUE),
+             Q1 = quantile(Damage, probs = 0.25, na.rm = TRUE),
+             Median = median(Damage , na.rm = TRUE),
+             Q3 = quantile(Damage, probs = 0.75, na.rm = TRUE),
+             Max = max(Damage , na.rm = TRUE)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+ggplot(CODGames2_mp, aes(x = Damage)) +
+  geom_histogram(bins = 30, fill = "lightgoldenrod", color = "black") +
+  theme_minimal() +
+  labs(title = "Histogram of Amount of Damage", 
+       x = "Damage", 
+       y = "Count")
+```
+
+The dataset provides information on the damage for each game achieved by the player. The data seems to have a heavy right skew. The mean amount of damage dealt is around 415 with a min and max of 56 and 960 respectively. The distribution seems to be fairly normal with a standard deviation of around 166. The median amount of damage dealt is 397. There is no missing data, ensuring completeness of the data and allowing for further analysis. 
+
+### Plot 3 - XP Type
+
+```{r}
+xp_type_counts <- table(CODGames2_mp$XPType, useNA = "ifany")
+xp_type_proportions <- prop.table(xp_type_counts)
+
+xp_type_df <- data.frame(
+  XPType = names(xp_type_counts),
+  Count = as.numeric(xp_type_counts),
+  Proportion = as.numeric(xp_type_proportions)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+xp_type_df
+
+CODGames2_mp %>%
+  filter(!is.na(XPType)) %>%
+  ggplot(aes(x = XPType)) +
+  geom_bar(fill = "sienna1", color = "black") +
+  theme_minimal() +
+  labs(title = "Distribution of XP Types", 
+       x = "XP Type", 
+       y = "Count")
+```
+
+We analyzed the XP type of each game recorded by the player. Based on the table construct from the dataset, 129 games were of 10% Boost XP type, making up around 61% of total games played and 82 games were of the Double XP + 10% type, making up around 39% of games played. Based on the results, we may conclude that Double XP is in the game less often than the 10% Boost. 
+
+### Plot 4 - Total XP
+
+```{r}
+summarize(CODGames2_mp, 
+             N = n(),
+             Na = sum(is.na(TotalXP)),
+             Mean = mean(TotalXP , na.rm = TRUE),
+             SD = sd(TotalXP , na.rm = TRUE),
+             Min = min(TotalXP , na.rm = TRUE),
+             Q1 = quantile(TotalXP, probs = 0.25, na.rm = TRUE),
+             Median = median(TotalXP , na.rm = TRUE),
+             Q3 = quantile(TotalXP, probs = 0.75, na.rm = TRUE),
+             Max = max(TotalXP , na.rm = TRUE)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+ggplot(CODGames2_mp, aes(x = TotalXP)) +
+  geom_histogram(bins = 30, fill = "plum", color = "black") +
+  theme_minimal() +
+  labs(title = "Histogram of Amount of Total XP", 
+       x = "Total XP", 
+       y = "Count")
+```
+
+We analyzed the total amoung of xp gained in each match. Based on the histogram, it seems to be right skewed. The distribution has a mean of about 11975, a min and max of 1935 and 43816 respectively, and a standard deviation of around 6167. The median total amount of xp gained is 10328. There are no missing observations regarding the variable TotalXP so we can perform further analysis on the data.
+
+### Plot 5 - Full Partial (Categorical)
+
+```{r}
+fullpartial_type_counts <- table(CODGames2_mp$FullPartial, useNA = "ifany")
+fullpartial_type_proportions <- prop.table(fullpartial_type_counts)
+
+fullpartial_type_df <- data.frame(
+  XPType = names(fullpartial_type_counts),
+  Count = as.numeric(fullpartial_type_counts),
+  Proportion = as.numeric(fullpartial_type_proportions)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+fullpartial_type_df
+
+CODGames2_mp %>%
+  filter(!is.na(FullPartial)) %>%
+  ggplot(aes(x = FullPartial)) +
+  geom_bar(fill = "slateblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Distribution of Full or Partial Games", 
+       x = "Full or Partial Game", 
+       y = "Count")
+```
+
+Finally, we analyzed the variable FullPartial. Based on the table obtained from the dataset, 191 games were full games (where the player played the entirety of the game from start to finish), making up around 91% of total games played and 20 games were partial games (the player joined while the game was in progress, taking the spot of the missing player), making up around 9% of the total games played. Based on the data, we can conclude that joining a math in progress is not uncommon and can affect the outcome of the game and the player drastically. We are aware that some games have a system put in place where players who join in the middle of a match lose less ranked points if they lose the match and gain more ranked points if they win to compensate for the portion of the game that was out of their control. There are no missing values so further analysis can be done.
+
+## Task 3  - Result (Proportion of Games Lost, Won, or Drawn)
+
+```{r}
+CODGames2_mp <- CODGames2_mp %>%
+  mutate(Result = as.character(Result)) 
+
+CODGames2_mp <- CODGames2_mp %>%
+  separate(Result, into = c("PlayerScore", "OpponentScore"), sep = "-", convert = TRUE) %>%
+  mutate(
+    Outcome = case_when(
+      PlayerScore > OpponentScore ~ "Win",
+      PlayerScore < OpponentScore ~ "Loss",
+      PlayerScore == OpponentScore ~ "Draw"
+    ),
+    Win = ifelse(PlayerScore > OpponentScore, 1, 0)
+  )
+
+outcome_counts <- table(CODGames2_mp$Outcome)
+outcome_proportions <- prop.table(outcome_counts)
+
+outcome_proportions
+```
+
+## Task 4 - Inference Question
+
+Our inference question is "How does PlayerScore, Eliminations, Deaths, and Score affect the odds of winning a match?". We want to model it after variables we believe to directly affect the outcome of a match.
+
+```{r}
+logit_model <- glm(Win ~ PlayerScore + Eliminations + Deaths + Score, 
+                   data = CODGames2_mp, 
+                   family = binomial)
+
+summary(logit_model)
+exp(coef(logit_model))
+```
+
+Based on the model, the intercept represents the odds of winning when all predictors are zero which is 0.056. This is a really low number and it makes sense because winning the match is impossible if PlayerScore = 0 as you will lose or end in a draw. The player having 0 eliminations, deaths, or score on the other hand is possible because the rest of the team is doing all the work, leading to the victory. The only possible way to win the match if all predictors are zero is if the entire enemy team left the match. Based on the results of the exponentiated coefficients for each variable, a one-unit increase in PlayerScore will increase the odds of winning by approximately 6.33%, a one-unit increase in Eliminations will increase the odds of winning by 12.76%, a one-unit increase in Deaths will decrease the odds of winning by 19.05%, and a one-unit increase in score will decrease the odds of winning by 0.042%, having a very minimal effect on the outcome of the game.
