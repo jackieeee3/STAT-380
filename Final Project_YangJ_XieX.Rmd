@@ -1,0 +1,844 @@
+---
+title: "STAT 380 Final Project"
+output: html_document
+date: "April 30, 2025"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter
+```{r}
+#Remove all objects from Environment
+remove(list = ls())
+
+#Load packages
+library(tidyverse)
+library(rpart) #For regression and classification trees
+library(rattle) #For nice visualization of trees
+library(kableExtra)
+library(broom)
+library(caret)
+library(randomForest)
+library(class)
+library(ggpubr)
+library(broom)
+library(emmeans)
+library(patchwork) 
+library(fuzzyjoin) # For next step clean typo
+library(e1071)
+
+#Read in Dataset
+# Jackie Yang
+CODGames_p1_380 <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames_p1_380.csv")
+CODGames_p2_380 <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames_p2_380.csv")
+CODMaps <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODMaps.csv")
+
+
+
+# Xinyu Xie
+#CODGames_p1_380 <- read.csv("CODGames_p1_380.csv")
+#CODGames_p2_380 <- read.csv("CODGames_p2_380.csv")
+#CODMaps <- read.csv("CODMaps.csv")
+
+
+head(CODGames_p1_380)
+head(CODGames_p2_380)
+```
+
+
+
+
+# Task 1 (Data Cleaning and Data Visualization – Complete without Generative AI)
+
+
+## Research Question: Which maps are the most likely to win the map vote when they are an option?
+
+## Plan
+
+To address this research question, we set up some steps.
+
+Step 1 Data Wrangling: The two parts of the dataset should be merged as per the requirement and then the contents of the dataset should be viewed. First, checking and resolving the quality issues present in the dataset and after that, creating a new variable `prob` for the probability of the map winningthe vote. We want to count the number of times each map is listed as a candidate map to win.
+
+Step 2 Data Visualization: See which map won the most times and had the highest probability of winning by using two bar charts.
+
+Step 3 Create an Aesthetically Pleasing Table: Show the number of times each map won and the probability of winning to draw conclusions about our research question.
+
+
+## Step 1 Data Wrangling
+```{r}
+# Combine the dataset as require
+CODGames <- rbind(CODGames_p1_380, CODGames_p2_380)
+CODGames_T3 <- CODGames
+#Check what kind of map name in the dataset
+unique(CODGames$Choice)
+
+# Using CODMaps names, we clean the data set
+CODGames <- CODGames %>%
+  mutate(Choice = ifelse(Choice == "APocalypse", "Apocalypse", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Apocolypse", "Apocalypse", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Drive-in", "Drive-In", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Deisel", "Diesel", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Riad", "Raid", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Collateral", "Collateral Strike", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Collaterel Strike", "Collateral Strike", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Nuketown '84 Halloween", "Nuketown '84", Choice))%>%
+  mutate(Choice = ifelse(Choice == "Nuketown '84 Halloween", "Nuketown '84", Choice))%>%
+  mutate(Map1 = ifelse(Map1 == "APocalypse", "Apocalypse", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Apocolypse", "Apocalypse", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Drive-in", "Drive-In", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Deisel", "Diesel", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Riad", "Raid", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Collateral", "Collateral Strike", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Collaterel Strike", "Collateral Strike", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Nuketown '84 Halloween", "Nuketown '84", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "Nuketown '84 Halloween", "Nuketown '84", Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "APocalypse", "Apocalypse", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "Apocolypse", "Apocalypse", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Drive-in", "Drive-In", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Deisel", "Diesel", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Riad", "Raid", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Collateral", "Collateral Strike", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Collaterel Strike", "Collateral Strike", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Nuketown '84 Halloween", "Nuketown '84", Map2))%>%
+  mutate(Map2 = ifelse(Map2 == "Nuketown '84 Halloween", "Nuketown '84", Map2))%>%
+  mutate(across(c(Choice, Map1, Map2), ~ tolower(str_trim(.))))%>%
+  filter(Map1 != "" & !is.na(Map1))%>%
+  mutate(Map1 = ifelse(Map1 == "amrada strike", "armada strike", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "amrada strike", "armada strike", Map2))%>%
+  mutate(Map1 = ifelse(Map1 == "collaterol strike", "collateral strike", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "collaterol strike", "collateral strike", Map2))%>%
+  mutate(Map1 = ifelse(Map1 == "collateral striek", "collateral strike", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "collateral striek", "collateral strike", Map2))%>%
+  mutate(Map1 = ifelse(Map1 == "deprogam", "deprogram", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "deprogam", "deprogram", Map2))%>%
+  mutate(Map1 = ifelse(Map1 == "miami sstrike", "miami strike", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "miami sstrike", "miami strike", Map2))%>%
+  mutate(Map1 = ifelse(Map1 == "miami stirke", "miami strike", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "miami stirke", "miami strike", Map2))%>%
+  mutate(Map1 = ifelse(Map1 == "ruah", "rush", Map1))%>%
+  mutate(Map2 = ifelse(Map2 == "ruah", "rush", Map2))%>%
+  filter(!MapVote %in% c("0 to 0","1 to 1", "2 to 2", "3 to 3", "4 to 4"))
+
+# Check again to make sure we did it correctly
+unique(CODGames$Choice)
+#unique(CODGames$MapVote)
+```
+
+We looked at the dataset and found a total of 37 different map names. According to the `CODMap.csv` file we know that we should only have 28 different map names. We modified the wrong name and used mutate() to change the map name to the official name and filtered for missing values. 
+
+We checked the validity of our cleanup with *unique(CODGames$Choice)*, for now we have 28 kind of maps name, consist with *CODmaps.csv*.
+
+We still need three new variables: the number of times a map appears, the number of times a map is won, and the percentage of wins for a map
+
+```{r}
+#
+CODGames_count_choice <- CODGames %>%
+  group_by(Choice)%>%
+  summarize(N_Choice = n())
+
+#
+CODGames_count_showup <- CODGames  %>%
+  pivot_longer(cols = c(Map1, Map2), names_to = "bind", values_to = "Show_up")%>%
+  group_by(Show_up) %>%
+  summarize(N_Show_up = n())
+
+#
+CODMaps <- CODMaps %>%
+  mutate(across(c(Name), ~ tolower(str_trim(.)))) %>%
+  full_join(CODGames_count_choice, by = c("Name" = "Choice")) %>%
+  full_join(CODGames_count_showup, by = c("Name" = "Show_up")) 
+
+
+CODMaps <- CODMaps%>%
+  mutate( picked_rate = N_Choice / N_Show_up)
+
+#head(CODMaps)
+
+```
+
+
+## Step 2 Data visualization
+
+### Bar Plot
+```{r}
+# Bar plot
+ggplot(data = CODMaps, aes(x = reorder(Name, -N_Choice), y = N_Choice)) +
+  geom_bar(stat = "identity", fill = "red", color = "black") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5, size = 14)
+  ) +
+  labs(
+    x = "Map Name",
+    y = "Number of Picks",
+    title = "Map Picks by Name"
+  )
+  
+```
+
+According to the bar graph, we found that *Crossroads Strike* is selected most often, but this does not mean that this map is most likely to win the map vote because we can't assume that every map has the same probability of appearing in a candidate position, and each map may have its own appearance weighting. We think this is often involved in game planning.
+
+```{r}
+# Bar plot
+ggplot(data = CODMaps, aes(x = reorder(Name, -N_Show_up), y = N_Show_up)) +
+  geom_bar(stat = "identity",fill = "red", color = "black") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5, size = 14)) + 
+  labs(x = "Map Name",
+       y = "Number of Picks")
+```
+
+```{r}
+# Bar plot
+ggplot(data = CODMaps, aes(x = reorder(Name, -picked_rate), y = picked_rate)) +
+  geom_bar(stat = "identity",fill = "red", color = "black") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5, size = 14)) + 
+  labs(x = "Map Name",
+       y = "Number of Picks")
+```
+
+## Step 3 Table of Results
+
+```{r}
+CODMaps %>%
+  dplyr::select(-FirstAvailable, -Date) %>%
+  rename(`Candidate count` = N_Show_up, `Picked Count` = N_Choice , `Picked Rate` = picked_rate) %>%
+  arrange(desc(`Picked Rate`)) %>%
+  kbl() %>%
+  kable_classic()
+```
+
+
+## conclusion
+
+these charts reflects how players prefer different maps in the game, with the Picked Rate calculated by the number of times they were actually picked versus the number of times they were candidates. Below is a detailed evaluation of its contents:
+The high Picked Rate of maps such as nuketown '84 (84.85%) and raid (82.05%) indicates that they are strongly favored by players; while garrison (35.56%) and apocalypse (37.26%) are relatively unfavored.
+The large variation in the number of picks (e.g. raid was picked 39 times, while the pines reached 58 times) may suggest that the map picking mechanism is not completely homogeneous. For example, keep the high Picked Rate maps, adjust or replace the low popularity maps, or analyze the reasons (map layout, tempo, visual style, etc.) for their low popularity.
+Picked Rate is not the same as absolute preference, as it also depends on "who you are competing with". For example, if a map is often voting against nuketown '84, it's hard for the other map to have a high Picked Rate as nuketown '84 has the most Picked Rate.
+
+
+
+
+
+
+# Task 2 (Data Cleaning and Data Visualization – Complete using Generative AI)
+
+
+
+```{r}
+#Prompts: “excel documents and the project information document, read task1 and finish task2"  
+# Under code is from ChatGPT 3o in task2
+
+# ==============================================================
+# 0. Load packages
+# ==============================================================
+library(tidyverse)
+library(stringdist)
+library(fuzzyjoin)
+library(binom)
+library(patchwork)
+
+# ==============================================================
+# 1. Read raw data
+# ==============================================================
+#games <- read_csv("CODGames_p1_380.csv") %>% 
+#         bind_rows(read_csv("CODGames_p2_380.csv"))
+
+#mapsref <- read_csv("CODMaps.csv") %>% 
+#           mutate(Name = str_trim(Name))
+
+games <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames_p1_380.csv") %>% 
+         bind_rows(read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames_p2_380.csv"))
+
+mapsref <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODMaps.csv") %>% 
+           mutate(Name = str_trim(Name))
+
+# ==============================================================
+# 2. Pre‑clean with manual dictionary (lower‑case, trim, recode)
+# ==============================================================
+
+## 2.1 lower‑case and trim
+games_clean <- games %>% 
+  mutate(across(c(Choice, Map1, Map2, MapVote),
+                ~ str_to_lower(str_trim(.))))
+
+## 2.2 manual misspelling dictionary
+fix_dict <- c(
+  "apocolypse"             = "apocalypse",
+  "deisel"                 = "diesel",
+  "riad"                   = "raid",
+  "collateral"             = "collateral strike",
+  "collaterel strike"      = "collateral strike",
+  "collateral striek"      = "collateral strike",
+  "collaterol strike"      = "collateral strike",
+  "nuketown '84 halloween" = "nuketown '84",
+  "amrada strike"          = "armada strike",
+  "deprogam"               = "deprogram",
+  "miami sstrike"          = "miami strike",
+  "miami stirke"           = "miami strike",
+  "ruah"                   = "rush"
+  # "drive-in" stays the same; size/case already fixed
+)
+
+games_clean <- games_clean %>% 
+  mutate(across(c(Choice, Map1, Map2),
+                ~ recode(., !!!fix_dict, .default = .)))
+
+## 2.3 filter out invalid rows
+games_clean <- games_clean %>% 
+  filter(Map1 != "" & !is.na(Map1)) %>%          # Map1 must exist
+  filter(!MapVote %in% c("0 to 0","1 to 1","2 to 2","3 to 3","4 to 4")) # drop ties
+
+# ==============================================================
+# 3. Map1 / Map2 to long format
+# ==============================================================
+candidates <- games_clean %>% 
+  dplyr::select(Map1, Map2, Choice, MapVote) %>% 
+  pivot_longer(Map1:Map2, names_to = "slot", values_to = "Map")
+
+# ==============================================================
+# 4. Exact + fuzzy match to official map list
+# ==============================================================
+exact <- inner_join(candidates, mapsref %>% mutate(Name = str_to_lower(Name)),
+                    by = c("Map" = "Name"))
+
+unmatched <- anti_join(candidates, exact, by = names(candidates))
+
+fuzzy <- stringdist_inner_join(
+           unmatched,
+           mapsref %>% mutate(Name = str_to_lower(Name)),
+           by       = c("Map" = "Name"),
+           method   = "jw",
+           max_dist = 0.18
+         ) %>% 
+         mutate(Map = Name) %>% 
+         dplyr::select(-Name)
+
+cleaned <- bind_rows(exact, fuzzy)
+
+# ==============================================================
+# 5. Flag tie‑break vs real wins
+# ==============================================================
+cleaned <- cleaned %>% 
+  mutate(
+    tie_win  = (slot == "map1") & (Map == Choice) & (MapVote != Choice),
+    real_win = (Map == Choice) & !tie_win
+  )
+
+# ==============================================================
+# 6. Summarise win rates + Wilson CI
+# ==============================================================
+summary_tbl <- cleaned %>% 
+  group_by(Map) %>% 
+  summarise(
+    n_candidate = n(),
+    n_total_win = sum(Map == Choice),
+    n_real_win  = sum(real_win),
+    .groups = "drop"
+  ) %>% 
+  mutate(
+    p_total     = n_total_win / n_candidate,
+    p_real      = n_real_win  / n_candidate,
+    lower_total = binom.wilson(n_total_win, n_candidate)$lower,
+    upper_total = binom.wilson(n_total_win, n_candidate)$upper,
+    lower_real  = binom.wilson(n_real_win,  n_candidate)$lower,
+    upper_real  = binom.wilson(n_real_win,  n_candidate)$upper
+  ) %>% 
+  arrange(desc(p_real))
+
+# ==============================================================
+# 7. Plot: overall vs real win rate
+# ==============================================================
+
+p_ <- ggplot(summary_tbl,
+                  aes(x = reorder(Map, p_total), y = p_total)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = lower_total, ymax = upper_total), width = 0.2) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Win probability (incl. tie‑breaks)",
+    title = "Overall Map‑vote Win Rate",
+    subtitle = "95% Wilson CI"
+  ) +
+  theme_minimal()
+
+p_real <- ggplot(summary_tbl,
+                 aes(x = reorder(Map, p_real), y = p_real)) +
+  geom_col(fill = "seagreen3") +
+  geom_errorbar(aes(ymin = lower_real, ymax = upper_real), width = 0.2) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Win probability (real wins only)",
+    title = "Real Map vote Win Rate",
+    subtitle = "95% Wilson CI"
+  ) +
+  theme_minimal()
+
+
+```
+
+
+```{r}
+
+# ==============================================================
+# 0. Load packages
+# ==============================================================
+library(tidyverse)
+library(stringdist)
+library(fuzzyjoin)
+library(binom)
+library(patchwork)
+
+# ==============================================================
+# 1. Read raw data
+# ==============================================================
+
+# Xinyu Xie
+#games <- read_csv("CODGames_p1_380.csv") %>% 
+#         bind_rows(read_csv("CODGames_p2_380.csv"))
+
+#mapsref <- read_csv("CODMaps.csv") %>% 
+#           mutate(Name = str_trim(Name))
+
+# Jackie Yang
+games <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames_p1_380.csv") %>% 
+         bind_rows(read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames_p2_380.csv"))
+
+mapsref <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODMaps.csv") %>% 
+           mutate(Name = str_trim(Name))
+
+# ==============================================================
+# 2. Pre‑clean with manual dictionary (lower‑case, trim, recode)
+# ==============================================================
+
+## 2.1 lower‑case and trim
+games_clean <- games %>% 
+  mutate(across(c(Choice, Map1, Map2, MapVote),
+                ~ str_to_lower(str_trim(.))))
+
+## 2.2 manual misspelling dictionary
+fix_dict <- c(
+  "apocolypse"             = "apocalypse",
+  "deisel"                 = "diesel",
+  "riad"                   = "raid",
+  "collateral"             = "collateral strike",
+  "collaterel strike"      = "collateral strike",
+  "collateral striek"      = "collateral strike",
+  "collaterol strike"      = "collateral strike",
+  "nuketown '84 halloween" = "nuketown '84",
+  "amrada strike"          = "armada strike",
+  "deprogam"               = "deprogram",
+  "miami sstrike"          = "miami strike",
+  "miami stirke"           = "miami strike",
+  "ruah"                   = "rush"
+  # "drive-in" stays the same; size/case already fixed
+)
+
+games_clean <- games_clean %>% 
+  mutate(across(c(Choice, Map1, Map2),
+                ~ recode(., !!!fix_dict, .default = .)))
+
+## 2.3 filter out invalid rows
+games_clean <- games_clean %>% 
+  filter(Map1 != "" & !is.na(Map1))
+
+# ==============================================================
+# 3. Map1 / Map2 to long format
+# ==============================================================
+candidates <- games_clean %>% 
+  dplyr::select(Map1, Map2, Choice, MapVote) %>% 
+  pivot_longer(Map1:Map2, names_to = "slot", values_to = "Map")
+
+# ==============================================================
+# 4. Exact + fuzzy match to official map list
+# ==============================================================
+exact <- inner_join(candidates, mapsref %>% mutate(Name = str_to_lower(Name)),
+                    by = c("Map" = "Name"))
+
+unmatched <- anti_join(candidates, exact, by = names(candidates))
+
+fuzzy <- stringdist_inner_join(
+           unmatched,
+           mapsref %>% mutate(Name = str_to_lower(Name)),
+           by       = c("Map" = "Name"),
+           method   = "jw",
+           max_dist = 0.18
+         ) %>% 
+         mutate(Map = Name) %>% 
+         dplyr::select(-Name)
+
+cleaned <- bind_rows(exact, fuzzy)
+
+# ==============================================================
+# 5. Flag tie‑break vs real wins
+# ==============================================================
+cleaned <- cleaned %>% 
+  mutate(
+    tie_win  = (slot == "map1") & (Map == Choice) & (MapVote != Choice),
+    real_win = (Map == Choice) & !tie_win
+  )
+
+# ==============================================================
+# 6. Summarise win rates + Wilson CI
+# ==============================================================
+summary_tbl <- cleaned %>% 
+  group_by(Map) %>% 
+  summarise(
+    n_candidate = n(),
+    n_total_win = sum(Map == Choice),
+    n_real_win  = sum(real_win),
+    .groups = "drop"
+  ) %>% 
+  mutate(
+    p_total     = n_total_win / n_candidate,
+    p_real      = n_real_win  / n_candidate,
+    lower_total = binom.wilson(n_total_win, n_candidate)$lower,
+    upper_total = binom.wilson(n_total_win, n_candidate)$upper,
+    lower_real  = binom.wilson(n_real_win,  n_candidate)$lower,
+    upper_real  = binom.wilson(n_real_win,  n_candidate)$upper
+  ) %>% 
+  arrange(desc(p_real))
+
+# ==============================================================
+# 7. Plot: overall vs real win rate
+# ==============================================================
+
+p_total <- ggplot(summary_tbl,
+                  aes(x = reorder(Map, p_total), y = p_total)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = lower_total, ymax = upper_total), width = 0.2) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Win probability (incl. tie‑breaks)",
+    title = "Overall Map vote Win Rate",
+    subtitle = "95% Wilson CI"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+
+
+```{r}
+#Prompts: “please Combine two plot" 
+ p_total + p_real + plot_layout(ncol = 2)   # side‑by‑side view
+```
+
+The model we are using is ChatGPT o3
+First of all, we are using the key words in the excel documents and the project information document. We asked GPT to read the Task 1 and Task 2 content carefully and generate the visualization based on the vocabulary that should be processed in excel.
+
+Point 1: Completeness and Scalability of Data Cleaning Strategies
+The Task 1 script uses an "exhaustive" manual dictionary: a sequence of mutate(ifelse()) to change misspellings to official names, line by line. This approach is extremely accurate, and will never misattribute a name as long as it is in the dictionary. However, its recall is limited by dictionary coverage - the next time a new misspelling appears (e.g., yamantou, raaid), the pipeline treats it as a "new map" and subsequent statistics are immediately distorted. The generative AI solution uses a two-stage "dictionary + fuzzy matching" approach: a small dictionary is applied to correct common misspellings, and the remaining unmatched entries are automatically merged using the Jaro-Winkler distance. Since there are only 28 entries in the map list and the names vary widely, the risk of misincorporation is low, but new misspellings in the future are automatically trapped. Thus, from a long-term maintenance point of view, the AI solution significantly reduces the burden of manual updates and is more scalable, while the manual solution is suitable only under the current data mode.
+
+Point 2: Depth of Flat Ticket Processing and Statistical Inference
+We script filters out "0 to 0" ~ "4 to 4" in the cleanup phase, meaning that the only games left in the analysis are those with a "clear majority"; the "50 % vs. 50 %" mechanism that automatically awards a win in the left column is ignored. The AI solution retains the tie rows, labeled tie_win, and calculates both the "overall win rate" and the "true win rate", allowing the reader to distinguish at a glance which maps have high win rates that rely on tie-ballooning. Further, the AI script attaches a Wilson 95% confidence interval to the win rate, reminding the decision maker that maps with small sample sizes (e.g., amerika) have a high degree of uncertainty, and that Task 1 only gives a six-decimal point estimate, which is easily misinterpreted as being "accurate to 1 in 10,000". In terms of revealing the details of game mechanics and quantifying statistical uncertainty, the AI solution is significantly more informative.
+
+Point 3: Code Simplicity and Maintainability
+The AI script puts all the misspellings into a named vector, and with stringdist_inner_join(), the complete cleaning process is realized in less than 10 lines; the rest of the steps are all connected by pipelines, the logic module is clear, and the reproduction only requires changing the data path. Although the Task 1 script is intuitive, it contains more than 40 lines of duplicate mutate() functions, and any new or undone maps have to be changed in multiple places, which is very easy to miss. Moreover, the multi-level mutate() chain is not only lengthy, but also lowers the readability of the code. The only advantage is that it doesn't rely on external package parameters, so business colleagues can understand the mapping table even if they don't know stringdist. If the project emphasizes interpretable results, the manual solution is more transparent. However, if the project emphasizes efficiency and reuse, The AI solution is clearly the winner.
+
+
+
+# Task 3 (Inference)
+
+## Research Question: How does the game type affect TotalXP after accounting for the Score?
+
+## Data Wrangling
+```{r}
+unique(CODGames_T3$GameType)
+
+CODGames_T3 <- CODGames_T3 %>%
+  mutate(
+    GameType = str_remove(GameType, "^HC\\s*[-–]?\\s*"),
+
+    GameType = str_to_title(str_trim(GameType)),
+
+    GameType = case_when(
+      GameType %in% c("Tdm", "Team Deathmatch") ~ "TDM",
+      GameType %in% c("Hardpoint")             ~ "Hardpoint",
+      TRUE                                     ~ GameType
+    )) %>%
+  filter(!is.na(Score))
+
+unique(CODGames_T3$GameType) 
+
+
+```
+
+We checked the validity of our cleanup with *unique(CODGames_T3$GameType)*
+
+## Data Visualization
+```{r}
+num_summary <- CODGames_T3 %>% 
+  summarise(across(c(Score, TotalXP),
+                   list(n      = ~sum(!is.na(.x)),
+                        mean   = mean,
+                        sd     = sd,
+                        min    = min,
+                        q1     = ~quantile(.x, .25),
+                        median = median,
+                        q3     = ~quantile(.x, .75),
+                        max    = max),
+                   .names = "{.col}_{.fn}"))
+print(num_summary)
+
+by_gt <- CODGames_T3 %>% 
+  group_by(GameType) %>% 
+  summarise(
+    n            = n(),
+    mean_Score   = mean(Score),
+    sd_Score     = sd(Score),
+    mean_TotalXP = mean(TotalXP),
+    sd_TotalXP   = sd(TotalXP),
+    .groups = "drop"
+  )
+print(by_gt)
+
+p1 <- ggplot(CODGames_T3, aes(Score)) +
+        geom_histogram(aes(y = ..density..), bins = 30, alpha = .6) +
+        geom_density(colour = "red") +
+        labs(title = "Score Density Plot", x = "Score", y = "Density")
+
+p2 <- ggplot(CODGames_T3, aes(TotalXP)) +
+        geom_histogram(aes(y = ..density..), bins = 30, alpha = .6) +
+        geom_density(colour = "red") +
+        labs(title = "Total Exp Density Plot", x = "Total Exp", y = "Density")
+
+
+p3 <- ggplot(CODGames_T3, aes(GameType, Score)) +
+        geom_boxplot() +
+        labs(title = "Score × Game Type Boxplot", x = "GameType", y = "Score") +
+        coord_flip()
+
+p4 <- ggplot(CODGames_T3, aes(GameType, TotalXP)) +
+        geom_boxplot() +
+        labs(title = "Total Exp × Game Type Boxplot", x = "Game Type", y = "Total Exp") +
+        coord_flip()
+
+
+
+(p1 | p2) / (p3 | p4) 
+
+
+```
+
+The density plots for Score and TotalXP revealed righ-skewed distributions with long tails, indicating that most players accumulated moderate amounts of score and experience, while a smaller group achieved exceptionally high values. 
+
+The boxplots stratified by GameType showed that Score and TotalXP distributions varied substantially across game modes. Specifically, players in Domination tended to achieve higher scores and experience values. In contrast, the Domination mode had notably lower and more tightly clustered distributions for score metrics. These differences highlight how game objectives and structure impact player performance outputs.
+
+
+
+```{r}
+ggplot(CODGames_T3, aes(x = Score, y = TotalXP, colour = GameType)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = F, linewidth = 1) + 
+  scale_colour_brewer(palette = "Dark2") + 
+  labs(title = "Linear Relationship Between Score and Total Experience by Game Type",
+       x = "Score", 
+       y = "Total Experience",
+       colour = "GameType", shape = "GameType") +
+  theme_minimal(base_size = 13) +
+  theme()
+
+slopes <- CODGames_T3 %>%
+  group_by(GameType) %>%
+  summarise(slope = coef(lm(TotalXP ~ Score))[2])
+
+slopes
+```
+
+
+This scatterplot visualizes the linear relationship between Score and TotalXP, with four colored fitted lines to distinguish between different Game Types. At the same time, the efficiency of the "experience/score" conversion varies from mode to mode. The slope is roughly in the order of Domination > Hardpoint > Kill Confirmed > TDM. TDM gives the least experience for the same score.
+
+
+
+## Modeling Multiple Linear Models
+
+```{r, results="hide"}
+model1 <- lm(TotalXP ~ Score + GameType, data = CODGames_T3)
+summary(model1)
+
+
+model2 <- lm(TotalXP ~ Score * GameType, data = CODGames_T3)
+summary(model2)
+
+anova(model1, model2) 
+
+```
+
+```{r}
+tidy(model1) %>%
+  mutate(across(where(is.numeric), round, 3)) %>%
+  kbl(caption = "Model 1: TotalXP ~ Score + GameType") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+tidy(model2) %>%
+  mutate(across(where(is.numeric), round, 3)) %>%
+  kbl(caption = "Model 2: TotalXP ~ Score * GameType (with interaction)") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+anova(model1, model2) %>%
+  mutate(across(where(is.numeric), round, 3)) %>%
+  kbl(caption = "ANOVA: Model Comparison (F-test for nested models)") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+
+```
+
+
+## Conclusion
+
+Because the interaction model was significantly better than the main effects-only model, Model 2 is recommended as the final answer:
+
+After controlling for player scores, the main effect of game mode on TotalXP is in the "score conversion rate" - TDM has the lowest conversion rate, followed by Kill Confirmed, and Hardpoint vs. Hardpoint and Domination are about equal.
+
+Therefore, Model 2 is selected as the final model for inference.
+
+In this model, Score remains the strongest predictor of TotalXP. However, the conversion efficiency from Score to TotalXP varies by GameType, as captured by the interaction terms:
+
+Among all predictors, Score is the only statistically significant predictor of TotalXP p = 0.003, confirming its role as the primary driver of experience gain. While game modes show different baseline intercepts, these are not statistically significant and thus not strongly interpretable.
+
+The interaction term for TDM is the most notable, with a nearly significant negative effect on the Score–Experience slope p ≈ 0.08, indicating that players in TDM gain fewer XP per unit of Score than in other modes. This supports the conclusion that game type influences TotalXP mainly by altering the "conversion rate" from Score, not by shifting absolute XP levels.
+
+
+# Task 4 (Prediction)
+
+## Research Question: Is KDR (kill/death ratio) a significant predictor in predicting game mode?
+
+## Random Forest
+
+```{r}
+# Calculate K/D Ratio
+games_model <- CODGames_T3 %>%
+  filter(Deaths > 0) %>%
+  mutate(KDR = Eliminations / Deaths) %>%
+  dplyr::select(GameType, KDR, Score, Damage, TotalXP) %>%
+  drop_na()
+
+
+set.seed(123)
+train_ind <- sample(1:nrow(games_model), floor(0.8 * nrow(games_model)))
+Train <- games_model[train_ind, ]
+Validation <- games_model[-train_ind, ]
+set.seed(NULL)
+
+Train$GameType <- as.factor(Train$GameType)
+Validation$GameType <- as.factor(Validation$GameType)
+
+Validation$GameType <- factor(Validation$GameType, levels = levels(Train$GameType))
+
+# Random forest model
+rf_model <- randomForest(GameType ~ ., data = Train, ntree = 500, importance = TRUE)
+
+# Predict
+rf_preds <- predict(rf_model, newdata = Validation)
+
+rf_model$importance
+```
+
+We created a new variable by combining the variables Eliminations and Deaths, using mutate() to compute the Kill/Death Ratio (KDR) as Eliminations divided by Deaths. A value greater than 1 indicates that the player had more eliminations than deaths; a value less than 1 indicates more deaths than eliminations; and a value equal to 1 indicates an equal number of eliminations and deaths.
+
+Using this new KDR variable along with other predictors such as Score, Damage, and TotalXP, we attempted to predict the game mode the player was participating in. We set a random seed for reproducibility and split the dataset into an 80/20 training/validation set.
+
+R required the GameType variable to be converted to a factor for both the training and validation sets. Based on the resulting table and the columns MeanDecreaseAccuracy and MeanDecreaseGini, it appears that Damage is the most important predictor across both metrics. The remaining variables had similar importance values, with KDR ranking second in MeanDecreaseAccuracy and third in MeanDecreaseGini.
+
+KDR also showed strong predictive power, especially in MeanDecreaseAccuracy, which means that players' relative efficiency in eliminating enemies over being eliminated is informative in distinguishing between game modes.
+
+
+## Knn
+
+```{r}
+train_X <- as.matrix(Train[, c("KDR", "Score", "Damage", "TotalXP")])
+test_X <- as.matrix(Validation[, c("KDR", "Score", "Damage", "TotalXP")])
+train_y <- Train$GameType
+
+# Run KNN
+knn_preds <- knn(train = train_X, test = test_X, cl = train_y, k = 5)
+
+# Evaluate
+confusionMatrix(knn_preds, Validation$GameType)
+```
+
+The second method we used was k-Nearest Neighbors (kNN) to predict GameType using the variables KDR, Score, Damage, and TotalXP. We created the matrices train_X (containing the input features), train_Y (the target labels), and test_X (the features from the validation set). The model was run with k = 5, and predictions were generated using the knn() function with train_Y as the class labels.
+
+The predictions stored in knn_pred were then evaluated using a confusion matrix, comparing the predicted game modes to the true values from the validation set. The model achieved an overall accuracy of approximately 64.8%, which is a moderately good performance for this type of classification task.
+
+However, the confusion matrix reveals certain discrepancies. In particular, the model struggled to correctly classify underrepresented classes such as Domination and Kill Confirmed, both of which have relatively few samples in the dataset. In contrast, it performed reasonably well on more frequent classes such as Team Deathmatch (TDM) and Hardpoint.
+
+This discrepancy highlights the effect of class imbalance in the training data: the model tends to perform better on the majority classes and worse on the minority ones. This is a known limitation of kNN, as it relies heavily on the local structure and density of the training data. Addressing this imbalance—through techniques such as oversampling, class weighting, or stratified sampling—may further improve performance for the less frequent game modes.
+
+## Naive Bayes
+
+```{r}
+# Naive Bayes with ALL predictors
+nb_full <- naiveBayes(GameType ~ KDR + Score + Damage + TotalXP, data = Train)
+nb_full_pred <- predict(nb_full, newdata = Validation)
+confusionMatrix(nb_full_pred, Validation$GameType)
+
+
+# With KDR Only
+nb_kdr <- naiveBayes(GameType ~ KDR, data = Train)
+nb_kdr_pred <- predict(nb_kdr, newdata = Validation)
+confusionMatrix(nb_kdr_pred, Validation$GameType)
+
+```
+```{r}
+# Naive Bayes Full
+nb_full_cm <- confusionMatrix(nb_full_pred, Validation$GameType)
+acc_nb_full <- nb_full_cm$overall['Accuracy']
+
+# Naive Bayes KDR
+nb_kdr_cm <- confusionMatrix(nb_kdr_pred, Validation$GameType)
+acc_nb_kdr <- nb_kdr_cm$overall['Accuracy']
+
+# KNN
+knn_cm <- confusionMatrix(knn_preds, Validation$GameType)
+acc_knn <- knn_cm$overall['Accuracy']
+
+# Random Forest
+rf_cm <- confusionMatrix(rf_preds, Validation$GameType)
+acc_rf <- rf_cm$overall['Accuracy']
+
+model_results <- data.frame(
+  Model = c("Naive Bayes (Full)", "Naive Bayes (KDR)", "kNN", "Random Forest"),
+  Accuracy = c(acc_nb_full, acc_nb_kdr, acc_knn, acc_rf)
+)
+
+
+ggplot(model_results, aes(x = Model, y = Accuracy, fill = Model)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = round(Accuracy, 3)), vjust = -0.5) +
+  ylim(0, 1) +
+  theme_minimal() +
+  labs(title = "Model Accuracy Comparison", y = "Accuracy", x = "Model") +
+  theme(legend.position = "none")
+
+
+```
+
+## Conclusions
+
+So for our research question the answer is Yes, KDR is a significant and informative predictor for distinguishing between game modes, though its effectiveness depends on the modeling method used.
+
+In Random Forest, KDR ranked second in MeanDecreaseAccuracy and third in MeanDecreaseGini, confirming it contributes meaningfully to classification decisions.
+
+In kNN, including KDR alongside other features resulted in a validation accuracy of around 64.8%, indicating its value when combined with Score and Damage.
+
+In Naive Bayes, KDR alone failed to differentiate between game modes, predicting only the majority class (TDM). However, its performance improved slightly when used with additional features, though still limited due to violation of Naive Bayes' independence assumptions.
+
+KDR reflects a player's combat efficiency and provides useful discriminatory power, especially in ensemble models like Random Forest. While it should not be used in isolation, it is a valuable component in multi-variable classification models for predicting game mode.
