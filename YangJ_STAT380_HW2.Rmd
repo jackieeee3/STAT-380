@@ -1,0 +1,204 @@
+---
+title: "STAT380_HW2"
+author: Jackie Yang
+output: html_document
+date: "Due: Thursday, January 30, 2025 by 11:59 PM"
+---
+
+## Instructions
+
+In class, we covered the basics of data wrangling using some of the basic `dplyr` verbs. The activities that follow are meant to provide further practice with these functions. This assignment will also include some data visualization review.
+
+In order to access the textbook, please see <https://mdsr-book.github.io/mdsr3e/>. 
+
+At the conclusion to the activity, you should upload
+
+1. your .html file named LastnameFirstInitial_STAT380_HW2.html 
+2. your .Rmd file named LastnameFirstInitial_STAT380_HW2.Rmd
+
+
+## Learning Objectives
+This assignment address aspects of the following learning objectives.
+
+1. Students will be able to load datasets from R packages and external sources into the R environment.
+2. Students will be able to identify R functions for and perform data wrangling tasks such as filtering observations based on a criterion, creating new variables, and restructuring data.
+3. Given one or more variables, students will be able to identify appropriate types of visualizations for exploring the distribution of the variable or the relationship between the variables visually.
+4. Given a research question, students will be able to create and customize an appropriate visualization using statistical software.
+5. Given one or more variables, students will be able to calculate summary statistics for exploring the distribution of the variable or the relationship between the variables numerically. 
+6. Given a visualization and summary statistics, students will be able to describe the insights gained from the information.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter - Clean Environment, Load Libraries, User Defined Functions
+```{r}
+rm(list = ls())
+#Add libraries as needed
+library(Lahman)
+library(ggplot2)
+library(dplyr)
+```
+
+## 1. Chapter 4.4 Exercises - Problem 3
+Consider the following pipeline:
+
+library(tidyverse)
+mtcars |>
+  group_by(cyl) |>
+  summarize(ave_mpg = mean(mpg)) |>
+  filter(am == 1)
+  
+What is the problem with this pipeline?
+
+The filter step comes after the summarize() function which has already reduced the dataset. This results in an error because am does not exist in the summarized data.
+
+NOTE: This refers to the Exercises, not the Supplementary Exercises.
+
+## 2. Chapter 4.4 Exercises - Problem 5
+Consider the following pipeline:
+
+mtcars |>
+  group_by(cyl) |>
+  summarize(
+    N = n(),
+    avg_mpg = mean(mpg)
+)
+
+What is the real world meaning of the variable N in the result set?
+
+The number of observations that have a certain number of cylinders. For example, there are 11 cars that have 4 cylinders.
+
+## 3. Chapter 4.4 Exercises - Problem 6
+
+Each of these tasks can be performed using a single data verb. For each task, say which verb it is:
+
+a. Find the average of one of the variables
+
+Summarize
+
+b. Add a new column that is the ratio between two variables
+
+Mutate
+
+c. Sort the cases in descending order of a variable
+
+Arrange
+
+d. Create a new data table that includes only those cases that meet a criterion
+
+Filter
+
+e. From a data table with three categorical variables A, B, and C, and a quantitative variable X, produce a data framce that has the same cases but only the variables A and X.
+
+Select
+
+## 4. Chapter 4.4 Exercises - Problem 4 - Define two new variables in the `Teams` data frame in the `Lahman` package and create the indicated plots.
+
+* This problem requires the `Lahman` package. From the `Lahman` packages, use the `Teams` data frame.
+
+* This problem is not identical to Problem 4, but it is similar.  I have tried to provide more details for you to help those who may not be familiar with baseball.
+
+* This question might be a bit tricky, especially if you are not familiar with baseball. HINT: In baseball, there are four types of hits: a single, a double, a triple, and a homerun. The dataset contains variables representing the total number of hits (`H`), the number of doubles (`X2B`), the number of triples (`X3B`), and the number of homeruns (`HR`), but not the number of singles. If you know all but one piece, how can you find the missing piece?
+
+a. Define batting average (`BA`). Batting average is the ratio of hits (`H`) to at-bats (`AB`).
+
+```{r}
+Teams <- Teams %>%
+  mutate(BA = H / AB)
+head(Teams)
+```
+
+
+b. Define slugging percentage (`SLG`). Slugging percentage is total bases earned by hits divided by at-bats. You will have to create a new variable that represents the total bases. To compute total bases, you get 1 for a single, 2 for a double, 3 for a triple, and 4 for a home run. For example, if a team has 11 total hits (5 singles, 3 doubles, 1 triple, and 2 home runs), then the team would have `5*1 + 3*2 + 1*3 + 2*4 = 22` total bases. The numbers in the dataset are larger, but this is just an example.
+
+```{r}
+Teams <- Teams %>%
+  mutate(singles = H - X2B - X3B - HR, total_bases = (singles * 1) + (X2B * 2) + (X3B * 3) + (HR * 4), SLG = total_bases / AB)
+head(Teams)
+```
+
+
+c. In order to show that the calculations in Part a. and Part b. were correct, display the first 10 rows of data. Include only the 5 variables: `yearID`, `teamID`, `franchID`, `BA` and `SLG`. In order to see if your answers are correct, the first row should have the values 1871, BS1, BNA, 0.310, and 0.422. If you are not getting these answers, it will affect almost all future answers so be sure to get help from your instructor or someone else.
+
+```{r}
+Teams %>% select(yearID, teamID, franchID, BA, SLG) %>% head(10)
+```
+
+
+d. Plot out the `SLG` (y-axis) as a function of `yearID` (x-axis), showing the individual teams and a smooth curve (i.e., use the loess smoother, which is the default, but remove the error/confidence interval bounds). NOTE: There should be a single smooth curve, not one for each team. When the instruction states that you should show individual teams, this simply means that each term should be shown as a point on the plot. You do NOT have to label each team with text, colors, shapes, etc.
+
+```{r}
+ggplot(data = Teams, mapping = aes(x = yearID, y = SLG)) + geom_point() + geom_smooth(method = "loess", se = FALSE, color = "red") + labs(title = 'Slugging Percentage Throughout the Years', x = 'Year', y = 'Slugging Percentage')
+```
+
+
+e. Same as Part d., but plot `BA` as a function of year.
+
+```{r}
+ggplot(data = Teams, mapping = aes(x = yearID, y = BA)) + geom_point() + geom_smooth(method = "loess", se = FALSE, color = "red") + labs(title = 'Batting Average Throughout the Years', x = 'Year', y = 'Batting Average')
+```
+
+
+## 5. Chapter 4.4 Exercises - Problem 7 - Find top teams based on sluggling percentage.
+
+a. Using the `Teams` data frame in the Lahman package, display the top-5 teams ranked in terms of slugging percentage (`SLG` which you computed in the previous question) in Major League Baseball history. Display the top 5 teams but only include the following variables: `yearID`, `lgID`, `teamID`, `franchID`, `SLG`. 
+
+* NOTE1: A higher `SLG` is better. So you are looking for the 5 highest values of `SLG`. 
+
+* NOTE2: When finding the "top 5 teams", the same team from two different years would could as 2. For instance, you may find the New York Yankees (`franchID = NYY`) from 2019 and 1927 make up two of the top 5 teams.
+
+```{r}
+top_five <- Teams %>%
+  select(yearID, lgID, teamID, franchID, SLG) %>%
+  arrange(desc(SLG)) %>%
+  head(5)
+print(top_five)
+```
+
+
+b. Repeat part a. using teams since 1969 (i.e, "since 1969" means  1969, 1970, 1971, ...).
+
+```{r}
+top_five_1969 <- Teams %>%
+  filter(yearID >= 1969) %>%
+  select(yearID, lgID, teamID, franchID, SLG) %>%
+  arrange(desc(SLG)) %>%
+  head(5)
+print(top_five_1969)
+```
+
+
+## 6. Chapter 4.4 Exercises - Problem 8 - Using the `Teams` data frame in the `Lahman` package, create more plots
+
+a. Plot `SLG` (y axis) as a function of `yearID` (x-axis) since 1954 conditioned by league (American vs. National, see `lgID`). Include the loess smoother (with or without error/confidence intervals). 
+
+* NOTE: To condition on league, you could either use faceting or add color; however, adding color will make the comparison easier to make in Part b.
+
+```{r}
+ggplot(data = Teams %>% filter(yearID >= 1954), mapping = aes(x = yearID, y = SLG, color = lgID)) + geom_point() + geom_smooth(method = "loess", se = FALSE) + labs(title = 'Slugging Percentage Throughout the Years by League', x = 'Year', y = 'Slugging Percentage', color = 'League')
+```
+
+b. Is slugging percentage typically higher in the American League (AL) or the National League (NL)? 
+
+Slugging percentage is typically higher in the American League
+
+c. (Ungraded) If you are familiar with baseball, can you explain why you see this pattern in the plot from Part a.?
+
+I don't know baseball but my best guess is that baseball became more popularized during the 70's and became a major sport in America, surpassing the National League.
+
+## 7. Recreate plot shown in Example 5a of Lecture 2 notes (side-by-side boxplots with the mean added to the boxplots.)
+
+* NOTE: On the plot in the handout, the mean is represented by a red triangle, point down. Since the handouts were printed in gray scale, it may not be apparent that the color was red.
+
+* HINT: In in the original `ggplot` command, specify a dataset contains the smokers over 40. In a later command in which you add another layer to the plot, specify a second dataset that has the mean associated with each region.
+
+```{r}
+L2_Insurance <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/L02_Insurance_m.csv")
+
+over_40 <- L2_Insurance %>%
+  filter(age > 40, smoker == 'yes')
+
+ggplot(data = over_40, mapping = aes(x = region, y = charges)) + geom_boxplot() + stat_summary(fun.y = mean, geom = "point", shape = 6, color = "red") + labs(x = 'Region', y = 'Charges')
+```
+
