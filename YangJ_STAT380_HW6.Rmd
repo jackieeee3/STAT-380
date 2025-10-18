@@ -1,0 +1,275 @@
+---
+title: "STAT380_HW6"
+author: Jackie Yang
+output: html_document
+date: "Due: Thursday, March 20, 2025 by 11:59 PM"
+---
+
+## Instructions
+
+In class, we covered one method for choosing the optimal number of nearest neighbors when working with k-nearest neighbors (kNN) in Lecture 10. We will practice that idea and compare the performance of our kNN model to that of linear regression. NOTE: All required `library` commands **must be** included in the Front Matter section. If you include your `library` commands elsewhere in your code, you will be penalized.
+
+At the conclusion to the activity, you should upload
+
+1. your .html file named LastnameFirstInitial_STAT380_HW6.html 
+2. your .Rmd file named LastnameFirstInitial_STAT380_HW6.Rmd
+
+## Learning Objectives
+This assignment address aspects of the following learning objectives.
+
+1. Students will be able to load datasets from R packages and external sources into the R environment.
+2. Students will be able to identify R functions for and perform data wrangling tasks such as filtering observations based on a criterion, creating new variables, and restructuring data.
+3.	Fit a linear regression model using statistical software, including situations involving polynomial terms, categorical predictions, and/or interaction terms
+4.	Perform k-nearest neighbors regression using statistical software, including using cross validation to select the number of neighbors
+5.	Compare the ability of competing models to generalize for new data.
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter - Clean Environment, Load Libraries, User Defined Functions
+```{r}
+rm(list = ls())
+#Add libraries as needed
+library(tidyverse)
+library(caret)
+library(FNN)
+#Read in dataset
+NOVA <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/NOVA.csv")
+```
+
+## Dataset
+
+The dataset used in this HW is the same dataset used in HW4. The file NOVA.csv contains a sample of properties in the Northern Virginia region (Arlington County, Fairfax County, and so on) listed on Remax.com in April 2019. The data set contains the following variables:
+
+* Bedrooms - number of bedrooms
+* Bathrooms - number of bathrooms
+* LivingSQFT - square footage of living area
+* Age - age of the house in years
+* DistToWH - distance from house to the White House in miles
+* LotSize - lot size in acres
+* ListingType - type of property (Condo/Townhome OR Single Family)
+* Floors - the number of floors in the house
+* CountySchool - the school district for the country 
+* Garage - the number of garage stalls
+* Price - the price of the home in dollars
+
+**The goal of this analysis is to predict the logprice of a property using bedrooms, bathrooms, square footage of living area, location (use Arlington indicator to represent the location), the number of floors, the number of garage stalls, and the distance to the White House.**
+
+## Problem 1 - Data Wrangling.
+
+#### a. Repeat the data cleaning from Problem 1 of HW4. 
+
+In particular, keep a copy of the original dataset named NOVA, and create a copy named NOVA2 for modification. Then, modify NOVA2 to only include the properties worth no more than the $3Million from Arlington and Fairfax counties.  Create a variable named called `logPrice` in `NOVA2` that represents the natural log of the house's price. Finally create indicator variables for `ListingType` and `CountySchool` (see Problem 1 Parts a, e-g in HW4).
+
+NOTE: To verify that you have performed these steps correctly, double check that the mean of log price is 13.50511 and the mean of Arlington is 0.2637151 (which is the proportion of properties in NOVA2 from Arlington). If you are NOT getting those EXACT (not close) answers, it will affect future answers. You should fix this before moving forward.
+
+```{r}
+NOVA2 <- NOVA
+
+NOVA2 <- NOVA2 %>%
+  filter(Price <= 3000000, CountySchool != 'LOUDOUN COUNTY PUBLIC SCHOOLS', CountySchool != 'PRINCE WILLIAM COUNTY PUBLIC SCHOOLS')
+
+NOVA2 <- NOVA2 %>%
+  mutate(logPrice = log(Price))
+
+NOVA2 <- NOVA2 %>%
+  mutate(Single = ifelse(ListingType == "Single Family", 1, 0),
+         Arlington = ifelse(CountySchool == "ARLINGTON COUNTY PUBLIC SCHOOLS", 1, 0))
+  
+mean_logPrice <- mean(NOVA2$logPrice, na.rm = TRUE)
+mean_arlington <- mean(NOVA2$Arlington, na.rm = TRUE)
+mean_logPrice
+mean_arlington
+```
+
+#### b. Standardize the inputs so that each has a mean of 0 and a standard deviation of 1. Moving forward, these will be called the scaled inputs. NOTE: Recall that the inputs are the x variables (INCLUDING indicators) and do not include the response (y) variable. Do **NOT** scale the response.
+
+```{r}
+xvars <- c("Bedrooms", "Bathrooms", "LivingSQFT", "Age", "DistToWH", "LotSize", "Floors", "Garage", "Single", "Arlington")
+NOVA2[, xvars] <- scale(NOVA2[, xvars], center = TRUE, scale = TRUE)
+```
+
+
+##### c. Perform an 80/20 training/validation split on `NOVA2` using the method presented in class and a seed of 92023. In the next problem, we will use the validation set approach to assess how well competing models are able to generalize to "new" data. 
+
+- NOTE: The current version of R (which is different from RStudio) is 4.4.2. If your version of R is \< 3.6.0, your should either update R or run your .Rmd file on a lab computer that has a version \>= 3.6.0. Failure to follow this instruction will make your remaining answers incorrect.
+
+```{r}
+set.seed(92023)
+train_data <- sample(1:nrow(NOVA2), floor(0.8 * nrow(NOVA2)))
+set.seed(NULL)
+
+Train <- NOVA2[train_data, ]
+Validation <- NOVA2[-train_data, ]
+```
+
+
+## Problem 2 - Compare Competing Models
+
+We wish to compare two models (multiple linear regression and *k*-nearest neighbors) for predicting `logPrice` using bedrooms, bathrooms, square footage of living area, location (use Arlington indicator to represent the location), the number of floors, the number of garage stalls, and the distance to the White House. Using the scaled inputs created in Problem 1, we will build the models and compare their ability to generalize to new data using the RMSE.
+
+#### a. Build a multiple linear regression model for predicting `logPrice` that includes all scaled inputs. Then, calculate the RMSE of the predictions for the "new" data. 
+
+- NOTE: You should know whether you are building this model using the full dataset, the training set, or the validation set. Similarly, you should know whether we are calculating RMSE based on the full dataset, the training set, or the validation set.
+
+```{r}
+lm_model <- lm(logPrice ~ Bedrooms + Bathrooms + LivingSQFT + Age + DistToWH + LotSize + Single + Floors + Arlington + Garage, data = Train)
+
+summary(lm_model)
+
+lm_predictions <- predict(lm_model, newdata = Validation)
+
+lm_rmse <- RMSE(lm_predictions, Validation$logPrice)
+lm_rmse
+```
+
+
+#### b. Build a kNN regression model for predicting `logPrice` using the scaled inputs. For each value of k from 1 to 50, build the model and store the RMSE. You should use a for loop to do this as we did in the notes. Display the RMSE values in your R output.
+
+```{r}
+mseVec <- rep(NA, 50)
+rmseVec <- rep(NA, 50) 
+
+for(i in 1:50){
+  knnRes <- knn.reg(train = Train[, xvars, drop = FALSE], test = Validation[, xvars, drop = FALSE], y = Train$logPrice, k = i)
+  mseVec[i] <- mean((Validation$logPrice - knnRes$pred)^2)
+  rmseVec[i] <- sqrt(mseVec[i])
+}
+rmseVec
+```
+
+
+#### c. Create a line plot showing the RMSE as a function of $k$. Make the line red. NOTE: A line plot is different than adding a linear smoother to a plot. 
+
+```{r}
+rmse_df <- data.frame(k = 1:50, RMSE = rmseVec)
+min_rmse <- rmse_df[which.min(rmse_df$RMSE), ]
+
+ggplot(rmse_df, aes(x = k, y = RMSE)) + geom_line(color = "red") + geom_point(data = min_rmse, aes(x = k, y = RMSE), color = "black") + labs(title = "RMSE vs. k in kNN Model", x = "Number of Neighbors (k)", y = "Root Mean Square Error (RMSE)")
+```
+
+
+#### d. Based on the plot and the results of the for loop, which value of $k$ should you use? Explain your choice.
+
+```{r}
+best_k <- rmse_df$k[which.min(rmse_df$RMSE)]
+best_rmse <- min(rmse_df$RMSE)
+
+cat("The optimal value of k is:", best_k)
+```
+
+This value is chosen because based on the plot, it yields the lowest RMSE value.
+
+#### e. Using the value of $k$ selected in the last problem, calculate the RMSE of the predictions for the "new" data.
+
+```{r}
+best_knnRes <- knn.reg(train = Train[ , xvars, drop = FALSE], test = Validation[ , xvars, drop = FALSE], y = Train$logPrice, k = best_k)
+
+new_mse <- mean((Validation$logPrice - best_knnRes$pred)^2)
+new_rmse <- sqrt(new_mse)
+
+cat("RMSE for the best value of k = 5 is:", new_rmse, "\n")
+```
+
+#### f. If we are interested in the ability to generalize to new data, which model (linear regression model or kNN with the optimal value of k) would you choose based on this analysis? Explain and use the relevant numbers in your discussion.
+
+Based on this analysis, I would choose the linear regression model as it has an RMSE value of 0.1782582 which is smaller compared with the RMSE value of the optimal kNN model which is 0.1972453.
+
+## Problem 3 - Other Considerations 1
+
+The validation RMSE values found in Problem 2 are difficult to interpret because they are on the log scale. To get an estimate of RMSE in dollars for the validation set using the models from Problem 2, take the steps shown below:
+
+- Use the predictions from Problem 2 to predict the log price for the data found in the validation set. (You likely already have these predictions from the validation set RMSE calculations in Problem 2 for the linear regression model, but you may need to obtain them again for the kNN model with the optimal value of $k$.)
+- Exponentiate the predictions for log price so that your predictions are in dollars. (Exponentiate means use $e^{logPrice Prediction}$ , which you will have to figure out how to do this in R). 
+- Calculate the residuals to determine how far the predictions in dollars are from the observed prices in dollars. 
+- Use the residuals in dollars to find RMSE.
+- NOTE: You should do this twice. Once for the linear regression model and once for the kNN model with the optimal value of $k$. Be sure that you show the RMSE values in dollars for both models in your output.
+
+```{r}
+lm_pred_log <- predict(lm_model, newdata = Validation)
+lm_pred_price <- exp(lm_pred_log)
+actual_price <- exp(Validation$logPrice)
+lm_residuals <- actual_price - lm_pred_price
+rmse_lm_dollars <- sqrt(mean(lm_residuals^2))
+rmse_lm_dollars
+
+knnRes_k5 <- knn.reg(train = Train[, xvars, drop = FALSE], test = Validation[, xvars, drop = FALSE], y = Train$logPrice, k = 5)
+knn_k5_pred_price <- exp(knnRes_k5$pred)
+knn_k5_residuals <- actual_price - knn_k5_pred_price
+rmse_knn_k5_dollars <- sqrt(mean(knn_k5_residuals^2))
+rmse_knn_k5_dollars
+```
+
+
+## Problem 4 - Other Considerations 2
+
+One of the criticisms of the validation set approach is that the results can be sensitive the seed. There can be a lot of variability in the validation set performance based on which observations are assigned to the validation set when the dataset is small. To show you this, I used 5 seeds and calculated the validation set RMSE in dollars (as we did in Problem 3.). My results were as follows:
+
+- NOTE: IF you cannot see my results in the table below (or the the table itself), read the html file rather than the rmd file.
+
+#### a.	While I expected some variability, something seems strange about the case in which the seed was 92025. Why is the validation set RMSE so high for this seed? HINT: Very large residuals can inflate the RMSE. Which validation set observation has the largest residual (in terms of absolute value)? What is special/unusual about that observation?
+
+- NOTE: It may be helpful to use the seed and build the model on the raw (i.e., unscaled data). Then, look at the residuals and determine what makes the observations with the largest residual (in terms of absolute value) unique.
+- NOTE: While the validation set approach does have some limitations, this example makes the method look very bad. The issue in this problem is an issue of data quality (or an issue of failing to deal with anomalies) rather than an issue with the validation set approach.
+
+```{r}
+set.seed(92025)
+
+train_data <- sample(1:nrow(NOVA2), floor(0.8 * nrow(NOVA2)))
+Train <- NOVA2[train_data, ]
+Validation <- NOVA2[-train_data, ]
+
+lm_model <- lm(logPrice ~ Bedrooms + Bathrooms + LivingSQFT + DistToWH + Floors + Arlington + Garage, data = Train)
+
+lm_predictions <- predict(lm_model, newdata = Validation)
+rmse_lm_log <- RMSE(lm_predictions, Validation$logPrice)
+
+lm_pred_log <- predict(lm_model, newdata = Validation)
+lm_pred_price <- exp(lm_pred_log)
+actual_price <- exp(Validation$logPrice)
+lm_residuals <- actual_price - lm_pred_price
+rmse_lm_dollars <- sqrt(mean(lm_residuals^2))
+
+abs_residuals <- abs(lm_residuals)
+max_residual_index <- which.max(abs_residuals)
+max_residual_value <- abs_residuals[max_residual_index]
+
+rmse_lm_log
+rmse_lm_dollars
+max_residual_value
+
+Validation[max_residual_index, ]
+```
+
+The LivingSQFT for the Validation data is unusually large compared with other observations, which may cause problems.
+
+## Problem 5 - Other Considerations Part 3
+In this problem, we consider an error message that can occur even if your code is free of error.
+
+#### a.	Run the code found in the STAT380_HW6.Rmd file for this problem. (This code is for modeling the price, rather than the logprice, but that is fine. Also, this problem uses the original dataset `NOVA` rather than `NOVA2`.) To run the chunk, you will need to remove `, eval = FALSE` from the R chunk header. The code performs a training/validation split. (It is not a good idea to perform the split in this manner, I just need to make a point.) Then, the code builds a model on the training data and tries to obtain predictions on the validation set in order to calculate RMSE on the validation set. This is no error in the code, but unfortunately, an error occurs as shown below. Explain why this is happening.
+
+```{r, error = TRUE}
+#Perform Training/Validation Split
+validation_inds <- c(411, 434, 443, 445, 446, 447, 448, 898)
+
+trainTemp <- NOVA[-validation_inds, ]
+validationTemp <- NOVA[validation_inds, ]
+
+#Build Model
+modelTemp <- lm(Price ~ LotSize + CountySchool, data = trainTemp)
+
+#Estimate RMSE on Validation Set
+yhatTemp <- predict(modelTemp, newdata = validationTemp)
+```
+
+- NOTE: So that your HW assignment will knit, you can either delete the R chunk that produces this error or add `, error = TRUE` to the R chunk header so that it will knit even with the error message.
+
+This error occurs because the validation set contains levels of CountySchool that are missing in the training set, specifically "LOUDOUN COUNTY PUBLIC SCHOOLS" and "PRINCE WILLIAM COUNTY PUBLIC SCHOOLS" because we removed them. We can fix this problem by using NOVA2 instead of NOVA.
+
+```{r}
+qgamma(c(0.025, 0.975), shape = 40, rate = 2 + T)
+```
+
