@@ -1,0 +1,278 @@
+---
+title: "STAT380_Group_Project"
+author: "Jackie Yang, Xinyu Xie"
+date: "2025-03-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<div style="text-align: center;">
+# COD Data Computation and Reasoning 
+</div>
+
+## Task 1 - Front Matter
+
+```{r}
+rm(list = ls())
+
+#Add libraries as needed
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(kableExtra)
+library(knitr)
+
+#Import dataset
+CODGames2_mp <- read_excel("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames2_mp.xlsx")
+#CODGames2_mp <- read_excel("E:/PSU/25spring/STAT 380/Project/CODGames2_mp.xlsx")
+#View(CODGames2_mp)
+```
+
+## Task 2 - Explore 5 Variables
+
+### Plot 1 - Game Type (Categorical)
+
+```{r}
+game_type_counts <- table(CODGames2_mp$GameType, useNA = "ifany")
+game_type_proportions <- prop.table(game_type_counts)
+
+game_type_df <- data.frame(
+  GameType = names(game_type_counts),
+  Count = as.numeric(game_type_counts),
+  Proportion = as.numeric(game_type_proportions))%>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+game_type_df
+
+CODGames2_mp %>%
+  filter(!is.na(GameType)) %>%
+  ggplot(aes(x = GameType)) +
+  geom_bar(fill = "blue", color = "black") +
+  theme_minimal() +
+  labs(title = "Distribution of Game Modes", 
+       x = "Game Type", 
+       y = "Count") +
+  coord_flip()
+
+```
+
+There are several classic game modes in Call of Duty and we analyze the variable "Game Type" in order to explore which mode the player plays most frequently. By analyzing this information, we can analyze statistics specified for each game mode. (TDM: Amount of kills. Kill Confirmed: Amount of tags collected. Hardpoint: Time on the point. Domination: Amount of objectives captured.) We think this is the most important thing to look at because each game mode needs to be played differently and a player's statistics (kills, deaths, score, etc.) could vary. (The following game terms represent different multiplayer game modes).
+
+There are 4 possible values: TDM, Kill Confirmed, Hardpoint, Domination. The player likes TDM mode (Team Deathmatch), with a percentage of 93.36% of the games played being TDM. The second most popular game mode statistically is Hardpoint but only accounts for about 3% of the total games played. There no NA value which prove by code "useNA = 'ifany'" which let table() count NA values instead of ignoring them by default.
+
+
+### Plot 2 - Eliminations (Quantitative)
+
+```{r}
+summarize( CODGames2_mp, 
+             N = n(),
+             Na = sum(is.na(Eliminations)),
+             Mean = mean(Eliminations , na.rm = TRUE),
+             SD = sd(Eliminations , na.rm = TRUE),
+             Min = min(Eliminations , na.rm = TRUE),
+             Q1 = quantile(Eliminations, probs = 0.25, na.rm = TRUE),
+             Median = median(Eliminations , na.rm = TRUE),
+             Q3 = quantile(Eliminations, probs = 0.75, na.rm = TRUE),
+             Max = max(Eliminations , na.rm = TRUE)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+
+ggplot(CODGames2_mp, aes(x = Eliminations )) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Histogram of Number of Eliminations", 
+       x = "Eliminations ", 
+       y = "Count")
+```
+
+The dataset provides information about the number of eliminations recorded by the player. The average number of eliminations for this player is around 15, with a wide spread(the minimum is 2, and the maximum is 39) and a right-skewed distribution. The standard deviation is around 6.13. This suggests that most of this player's eliminations fall within 6.13 kills above or below the average. The presence of a few high elimination outliers suggests that in some games, this player is performing exceptionally well. There is no missing data which ensures the completeness of the dataset and provides a reliable basis for further analysis. Understanding this distribution can help balance the game and optimize the match-making system.
+
+
+
+### Plot 3 - Deaths (Quantitative)
+
+```{r}
+summarize(CODGames2_mp, 
+             N = n(),
+             Na = sum(is.na(Deaths)),
+             Mean = mean(Deaths , na.rm = TRUE),
+             SD = sd(Deaths , na.rm = TRUE),
+             Min = min(Deaths , na.rm = TRUE),
+             Q1 = quantile(Deaths, probs = 0.25, na.rm = TRUE),
+             Median = median(Deaths , na.rm = TRUE),
+             Q3 = quantile(Deaths, probs = 0.75, na.rm = TRUE),
+             Max = max(Deaths , na.rm = TRUE)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+
+ggplot(CODGames2_mp, aes(x = Deaths )) +
+  geom_histogram(bins = 30, fill = "pink", color = "black") +
+  theme_minimal() +
+  labs(title = "Histogram of Deaths ",
+       x = "Deaths ", 
+       y = "Count")
+```
+
+The dataset provides information about the number of deaths recorded by the player. The average number of deaths for most games is around 14.98, with a wide spread (the minimum is 4, and the maximum is 42) and a right-skewed distribution. The standard deviation is 5.13, suggesting that most of the player's deaths fall within 5.13 deaths above or below the average. This indicates some variation in performance, but the majority of games tend to have death counts clustered around the mean. The presence of a few high-death outliers suggests that in some games, the plaher is experiencing significantly more deaths than the average, possibly due to a skill difference between teams. Dying 42 times obviously leads to an extremely bad experience for the player. There is no missing data, ensuring the completeness of the dataset and providing a reliable basis for further analysis. Understanding this distribution can help balance game mechanics, optimize match-making systems to ensure a fair and offer an engaging experience for all players.
+
+### Plot 4 - Score (Quantitative)
+
+```{r}
+summarize( CODGames2_mp, 
+             N = n(),
+             Na = sum(is.na(Score)),
+             Mean = mean(Score , na.rm = TRUE),
+             SD = sd(Score , na.rm = TRUE),
+             Min = min(Score , na.rm = TRUE),
+             Q1 = quantile(Score, probs = 0.25, na.rm = TRUE),
+             Median = median(Score , na.rm = TRUE),
+             Q3 = quantile(Score, probs = 0.75, na.rm = TRUE),
+             Max = max(Score , na.rm = TRUE)) %>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+
+ggplot(CODGames2_mp, aes(x = Score )) +
+  geom_histogram(bins = 30, fill = "green", color = "black") +
+  theme_minimal() +
+  labs(title = "Histogram of Match Score ", 
+       x = "Score ", 
+       y = "Count")
+```
+
+The dataset provides information about the match score recorded by the player. The average match score is 2944.53, with a wide spread (the minimum is 100, and the maximum is 7315) and a left-skewed distribution. The standard deviation is 1464.97, indicating that in most games, the player's scores falls within 1464.97 points above or below the average. The median score is 2770. The interquartile range is from 1982.5 (Q1) to 3582.5 (Q3), showing that most of the recorded scores are concentrated in this range. The presence of a few high-score outliers suggests that in some games, this player is performing exceptionally well, possibly due to skill level, game mode, or strategic advantages, but most likely it's not an even game. There is no missing data, ensuring the completeness of the dataset and allowing for accurate analysis. Understanding this distribution can help in game balancing and a ranking systems that provides a fair and competitive experience for all players.
+
+### Plot 5 - Primary Weapon (Categorical)
+
+```{r}
+PrimaryWeapon_counts <- table(CODGames2_mp$PrimaryWeapon, useNA = "ifany")
+PrimaryWeapon_proportions <- prop.table(PrimaryWeapon_counts)
+
+PrimaryWeapon_df <- data.frame(
+  PrimaryWeapon = names(PrimaryWeapon_counts),
+  Count = as.numeric(PrimaryWeapon_counts),
+  Proportion = as.numeric(PrimaryWeapon_proportions))%>%
+  kable() %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+PrimaryWeapon_df
+
+CODGames2_mp %>%
+  filter(!is.na(GameType)) %>%
+  ggplot(aes(x = PrimaryWeapon)) +
+  geom_bar(fill = "orange", color = "black") +
+  theme_minimal() +
+  labs(title = "Bar Chart of Player's Preferred Primary Weapon", 
+       x = "Primary Weapon", 
+       y = "Number of Picked")
+```
+
+The bar plot and table analyzes the primary weapon of choice in the game, helping us understand which weapons this player prefers for whatever reason. By examining this information, developers can tweak weapon balance, optimize the competitive experience, and make informed decisions about the game's nerfs and buffs to weapons and mechanics.
+
+The player seem to favor a mix of assault rifles. The most popular weapon is the M16, accounting for 22.75% (48 picks). MP5 follows closely, making up 21.32% (45 picks). Pelington 703 and QBZ-83 also have a significant share, around 18% and 17.5%, respectively. AK-47 and FFAR 1 are the least picked weapons, with a share below 2%. MG 82 has the lowest selection count, with only 2 picks (0.95%). There no NA value which prove by code "useNA = 'ifany'" which let table() count NA values instead of ignoring them by default. 
+
+
+## Task 3 - Write 3 Questions for Manager.
+
+### Question 1
+
+Were there are any missing or incomplete records in the dataset?
+The dataset appears large, but it is important to confirm if all matches are fully recorded. Are there instances where some variables are missing values, and if so, what is the reason behind these missing values? Even though I (Xinyu) play a lot of FPS, I haven't touched Call of Duty, so I would guess that some of the data is not collected because of gameplay limitations, like not being able to use awp on the first turn in CS (Maybe not so appropriate). I (Jackie) also believe that it is important to record the statistics of each match. I think that there should not be missing values because during and after the match, you can access the scoreboard. Even on the main menu, you can go to your game history and record statistics from there.
+
+### Question 2
+
+How was this data collected?
+How the experiment was designed directly affects the data collection, was this data randomly sampled or were they just limited to one segment. If the sampling is not random enough (recorded across different days of the week, every weekend for a month, etc.), the data will not be representative of all games and it will be harder to assign meaning to our analysis.
+
+### Question 3
+
+What does each variable represent?
+While some variables like Eliminations, Deaths, and Score seem intuitive, others like XPType, DidPlayerVote, Diffuses, Deposits, and Plants require clarification. Understanding their exact meaning and how they are recorded is essential for accurate analysis. Although Search & Destroy did not appear in the dataset, it is still important the varaibles associated with the game mode (Plants, DIffuses, etc.)
+
+
+## Task 4 - Asking a question that can be answered using the dataset and data visualization.
+
+### Part(a) -  Is the player’s performance, as quantified by the amount of experience points gained changing over time?
+
+```{r}
+CODGames2_mp$Date <- as.Date(CODGames2_mp$Date, format = "%m/%d/%Y")
+CODGames2_mp$Month <- month(CODGames2_mp$Date, label = TRUE, abbr = FALSE, locale = "English")
+
+ggplot(CODGames2_mp, aes(x = Month, y = TotalXP, fill = Month)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Boxplot of TotalXP Across Months",
+       x = "Month",
+       y = "TotalXP") + 
+  scale_fill_manual(values = c("red", "cyan", "yellow"))
+```
+
+Looking at the boxplot, we don't think there's a large difference in the total experience of the player gained in the three months of June, July, and August because the box is in roughly the same location. However, we found that the number of experience this player gained in July showed more values that were higher. Our guess is that there is a possibility that this is caused by the fact that this player is spending more time playing Call of Duty during the summer. For proof of our conclusion, we use an anova test.
+
+
+```{r}
+anova_model <- aov(TotalXP ~ Month, data = CODGames2_mp)
+anova_summary <- summary(anova_model)
+
+anova_df <- data.frame(
+  Source = c("Month", "Residuals"),
+  Df = c(anova_summary[[1]]$Df[1], anova_summary[[1]]$Df[2]),
+  F_value = c(anova_summary[[1]]$`F value`[1], NA),
+  P_Value = c(anova_summary[[1]]$`Pr(>F)`[1], NA))
+
+kable(anova_df, format = "html", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+
+```
+
+There is no good reason to reject the original hypothesis, so we don't think there is a significant difference in the amount of XP values gained with the passage of time.
+
+
+### Part(b) -  Exploring the Relationship Between Score and Eliminations
+
+We will explore the relationship between Score and Eliminations to determine if higher eliminations lead to higher scores.
+
+```{r}
+ggplot(CODGames2_mp, aes(x = Eliminations, y = Score)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  theme_minimal() +
+  labs(title = "Relationship Between Eliminations and Score",
+       x = "Eliminations",
+       y = "Score")
+```
+
+Looking through the plots, this is a more obvious linear relationship, as when the number of eliminations is higher, the score tends to be higher. We can verify our hypothesis with linear regression.
+
+
+```{r}
+model1 <- lm(Score ~ Eliminations, data = CODGames2_mp)
+summary_model1 <- summary(model1)
+
+coefficients_df <- as.data.frame(summary_model1$coefficients)
+colnames(coefficients_df) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
+
+coefficients_df <- cbind(Variable = rownames(coefficients_df), coefficients_df)
+rownames(coefficients_df) <- NULL
+
+kable(coefficients_df, format = "html", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+```
+
+Since the p-value is significantly less than the sig.level, we have ample evidence to reject the original hypothesis. We can assume that as the number of eliminations is higher, the score tends to be higher.
+
+
+## Contribution
+
+Jackie Yang ： Participated actively in the discussion, completed the Part.2 and Part.3 plot visualizations and explained them. Proofread  report.
+
+Xinyu Xie：Participated actively in the discussion, completed Part.1, Part.4, and Part.5 and explained them and made changes to the code format.
