@@ -1,0 +1,207 @@
+---
+title: "STAT380_HW7"
+author: Jackie Yang
+output: html_document
+date: "Due: Thursday, March 27, 2025 by 11:59 PM"
+---
+
+## Instructions
+
+In class, we covered the basics of using k-fold cross validation for multiple linear regression models and kNN regression models. The activities that follow are meant to provide further practice with these concepts. NOTE: All required `library` commands **must be** included in the Front Matter section. If you include your `library` commands elsewhere in your code, you will be penalized.
+
+At the conclusion to the activity, you should upload
+
+1. your .html file named LastnameFirstInitial_STAT380_HW7.html 
+2. your .Rmd file named LastnameFirstInitial_STAT380_HW7.Rmd
+
+## Learning Objectives
+This assignment address aspects of the following learning objectives.
+
+1. Students will be able to load datasets from R packages and external sources into the R environment.
+2. Students will be able to identify R functions for and perform data wrangling tasks such as filtering observations based on a criterion, creating new variables, and restructuring data.
+3. Students will be able to use iteration (loops, apply, etc.) to perform tasks that must be repeated many times on a given dataset.
+4. Given a statistical learning method, students will be able to restructure the data for use in the corresponding R function.
+5. Fit a linear regression model using statistical software, including situations involving polynomial terms, categorical predictions, and/or interaction terms.
+6. Perform k-nearest neighbors regression using statistical software, including using cross validation to select the number of neighbors.
+7. Compare the ability of competing models to generalize for new data.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter - Clean Environment, Load Libraries, User Defined Functions
+```{r}
+rm(list = ls())
+#Add libraries as needed
+library(tidyverse)
+library(caret)
+library(FNN)
+library(ggplot2)
+options(scipen = 999)
+#Read in dataset
+Insurance <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/L02_Insurance_m.csv")
+Insurance <- na.omit(Insurance)
+head(Insurance)
+```
+
+
+## Dataset
+
+`L02_Insurance_m.csv` contains information about a number of health insurance policies. In particular, the data set contains some attributes of the policy holder (such as age, sex, etc.) and the total charges billed by the health care provider. Details about the variables included follow.
+
+* `age` - age of primary beneficiary
+* `sex` - sex of primary beneficiary
+* `bmi` - Body mass index, providing an understanding of body, weights that are relatively high or low relative to height, objective index of body weight (kg / m \^ 2) using the ratio of height to weight, ideally 18.5 to 24.9
+* `children` - Number of children covered by the health insurance policy (i.e., the number of dependents)
+* `smoker` - Status indicating whether the person is a smoker (options include 'yes' and 'no')
+* `region` - the beneficiary's residential area in the US (options include northeast, southeast, southwest, northwest).
+* `charges` - Individual medical costs as billed by health insurance
+
+Our goal is to predict `charges` using `age`, `sex`, `bmi`, `children`, and smoking status (`smoker`).
+
+## Problem 1 - Which method (multiple linear regression or kNN) produces the most accurate predictions for new data? To answer this, compare the performance of the methods using 10-fold cross validation.
+
+a. Prepare the data for implementing multiple linear regression and kNN. NOTE: I am not telling you the exact steps to take prepare the data, but if you unsure of the steps, see Problem 2 in HW5.
+
+```{r}
+Insurance <- Insurance %>%
+  mutate(Male = ifelse(sex == "male", 1, 0),
+         Smoker = ifelse(smoker == "yes", 1, 0))
+
+xvars <- c("age", "Male", "bmi", "children", "Smoker")
+
+Insurance[ , xvars] <- scale(Insurance[ , xvars], center = TRUE, scale = TRUE)
+```
+
+
+b. Assign the fold values and randomly permute them using a seed of 123. To make sure you are on the right path, the folds for the first few observations are provided below. (If you cannot see the results, check the .html file containing the knitted instructions.)
+
+```{r}
+num_folds <- 10
+folds <- cut(x = 1:nrow(Insurance), breaks = num_folds, labels = FALSE)
+set.seed(123)
+folds <- sample(folds)
+set.seed(NULL)
+```
+
+
+c. Implement 10-fold cross validation for the multiple linear regression model for predicting `charges` using `age`, `sex`, `bmi`, `children`, and smoking status (`smoker`). For each fold, calculate the Mean Square Error (MSE). Display the 10 MSE values **and** report the mean of the 10 MSE values.
+
+    * NOTE: Be sure to compute the MSE for each fold instead of the RMSE for each fold.
+    * NOTE: To implement 10-fold cross validation for this problem (and the next problem), you should write a loop for cycling through the folds as discussed in class instead of using a black box function that does everything behind the scenes.
+
+```{r}
+mseVec <- rep(NA, num_folds)
+
+for(i in 1:num_folds){
+  valInd <- which(folds == i)
+  Validation <- Insurance[valInd, ]
+  Train <- Insurance[-valInd, ]
+  
+  modelRes <- lm(charges ~ age + Male + bmi + children + Smoker, data = Train)
+  
+  yhat <- predict(modelRes, newdata = Validation)
+  
+  mseVec[i] <- mean((Validation$charges - yhat)^2)
+}
+
+mseVec
+
+lm_rmseVec <- sqrt(mseVec)
+mean_lm_rmse <- mean(lm_rmseVec)
+```
+
+
+d. Implement 10-fold cross validation for the k-Nearest Neighbors (kNN) regression model for predicting `charges` using `age`, `sex`, `bmi`, `children`, and smoking status (`smoker`). For the purposes of selecting k, consider values of k ranging from 1 to 50. Create a plot showing the Mean Mean Square Error (Mean MSE) for each fold as a function of k **and** state which value of k is optimal.
+
+     * NOTE: This can be challenging since we did not do this exact problem in the notes. The Lecture 11 Supplement document outlines the procedure and the code for you. You should start by reading the document.
+     * NOTE: When working in data science, you often have to read about a topic you have not previously implemented. Then, you try to implement it. That is the purpose of this question.
+     
+
+```{r}
+maxK <- 50
+
+mseMat <- matrix(NA, nrow = num_folds, ncol = maxK)
+
+for(i in 1:num_folds){
+  valInd <- which(folds == i)
+  Validation <- Insurance[valInd, ]
+  Train <- Insurance[-valInd, ]
+  
+  for(j in 1:maxK){
+    knn_res <- knn.reg(train = Train[ , xvars, drop = FALSE],
+                         test = Validation[ , xvars, drop = FALSE],
+                         y = Train$charges,
+                         k = j)
+    
+    mseMat[i, j] <- mean((Validation$charges - knn_res$pred)^2)
+  }
+}
+
+cvMSE <- colMeans(mseMat)
+cvMSE
+
+kNN_rmse <- sqrt(cvMSE)
+mean_kNN_rmse <- mean(kNN_rmse)
+
+plot_data <- data.frame(
+  k = rep(1:maxK, each = num_folds),
+  fold = rep(1:num_folds, times = maxK),
+  mse = as.vector(mseMat)
+)
+
+optimal_k <- which.min(cvMSE)
+optimal_mse <- cvMSE[optimal_k]
+
+optimal_k
+optimal_mse
+
+plot_data <- data.frame(
+  k = 1:maxK,
+  mean_mse = cvMSE
+)
+
+ggplot(plot_data, aes(x = k, y = mean_mse)) +
+  geom_line(color = "black") +
+  labs(x = "k", y = "MSE") + 
+  geom_point(x = optimal_k, y = optimal_mse, color = "red", shape = 4, stroke = 2)
+
+cat("The optimal k value is:", optimal_k)
+```
+
+e. Which method (multiple linear regression or kNN) produces the most accurate predictions for new data? **Explain your reasoning** by discussing the RMSE values associated with each method. NOTE: Although we calculated MSE values in Parts c. and d., compare the RMSE values in this question. Be sure to state the RMSE values.
+
+The kNN method produces the most accurate predictions for new data.
+```{r}
+cat("RMSE values for linear regression:", lm_rmseVec, "\n")
+cat("RMSE values for kNN:", kNN_rmse, "\n")
+cat("Mean RMSE for linear regression:", mean_lm_rmse, "\n")
+cat("Mean RMSE for kNN:", mean_kNN_rmse, "\n")
+```
+
+
+
+## Problem 2 - Plot
+Recreate the plot shown below. (If you are not seeing the plot, be sure to open the .html file containing the instructions from Canvas.) The plot shows the plot created in Problem 1d (MSE as a function of k), but includes errors bars. For each value of k, you are to draw a **red** line that goes from  (Mean MSE - standard deviation) to (Mean MSE + standard deviation). The Mean MSE is the mean of the MSE values within each fold. The standard deviation in this problem corresponds to the standard deviation of the MSE values within each fold. NOTE: While the error bars appear to have a similar length, the standard deviation is a different number for each value of k. 
+
+```{r}
+cvMSE <- colMeans(mseMat)
+cvSD <- apply(mseMat, 2, sd)
+
+plot_data <- data.frame(
+  k = 1:maxK,
+  mean_mse = cvMSE,
+  lower = cvMSE - cvSD,
+  upper = cvMSE + cvSD
+)
+
+optimal_k <- which.min(cvMSE)
+optimal_mse <- cvMSE[optimal_k]
+
+ggplot(plot_data, aes(x = k, y = mean_mse)) +
+  geom_line(color = "black") +
+  geom_segment(aes(x = k, y = lower, yend = upper), color = "red", linewidth = 1) +
+  labs(x = "k", y = "MSE")
+```
+
