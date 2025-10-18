@@ -1,0 +1,141 @@
+---
+title: "Mini-Project3_YangJ_XieX"
+author: "Jackie Yang, Xinyu Xie"
+date: "2025-04-28"
+output: html_document
+---
+
+## Front Matter
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(MASS)
+library(glmnet)
+library(rpart)
+library(rattle)
+
+CODGames2_mp <- read_excel("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/CODGames2_mp.xlsx")
+```
+
+## Task 1 - Remove Partial
+
+```{r}
+CODGames2_mp <- CODGames2_mp %>%
+  filter(FullPartial != "Partial")
+CODGames2_mp
+
+ggplot(CODGames2_mp, aes(x = XPType, y = TotalXP)) + 
+  geom_boxplot(fill = "lightblue") + 
+  labs(x = "Experience Type", y = "Total Experience", title = "Total Experience by Experience Type")
+
+CODGames2_mp %>%
+  group_by(XPType) %>%
+  summarize(
+    Mean = mean(TotalXP, na.rm = TRUE),
+    Median = median(TotalXP, na.rm = TRUE),
+    SD = sd(TotalXP, na.rm = TRUE),
+    Min = min(TotalXP, na.rm = TRUE),
+    Max = max(TotalXP, na.rm = TRUE),
+    Count = n()
+  )
+```
+
+Based on the summary statistics, the games where the player had Double XP + 10% as the experience type generally had more total experience than when the player had only the 10% Boost. Also, looking at the boxplots, the distribution of the experience type DOuble XP + 10% shows a higher spread than the experience type 10% Boost. Additionally, there seems to be more outliers.
+
+## Task 2 Building Model
+
+```{r}
+CODGames2_mp_HC_TDM <- CODGames2_mp %>%
+  filter(GameType == "HC - TDM")
+
+CODGames2_mp_HC_TDM <- CODGames2_mp_HC_TDM %>%
+  separate(Result, into = c("PlayerScore", "OpponentScore"), sep = "-", convert = TRUE) %>%
+  mutate(
+    Outcome = case_when(
+      PlayerScore > OpponentScore ~ "Win",
+      PlayerScore < OpponentScore ~ "Loss",
+      PlayerScore == OpponentScore ~ "Draw"
+    ),
+    Win = ifelse(PlayerScore > OpponentScore, 1, 0)
+  )
+CODGames2_mp_HC_TDM
+
+full_model <- lm(Score ~ TotalXP + Eliminations + Deaths + Damage + XPType + Win, data = CODGames2_mp_HC_TDM)
+
+summary(full_model)
+```
+
+NOTE: The variable Damage seems to be insignificant as it has a large p-value (> 0.05)
+
+## Task 2a. LASSO Regresison and Other Feature Selection Method
+
+```{r}
+Xmat <- model.matrix(Score ~ TotalXP + Eliminations + Deaths + Damage + XPType + Win, data = CODGames2_mp_HC_TDM)[ , -1]
+Ymat <- CODGames2_mp_HC_TDM$Score
+
+lasso_model <- glmnet(Xmat, Ymat, alpha = 1)
+
+set.seed(123)
+lassoCV <- cv.glmnet(Xmat, Ymat, alpha = 1)
+set.seed(NULL)
+
+plot(lassoCV)
+best_lambda <- lassoCV$lambda.min
+best_lambda
+
+coef(lassoCV, s = "lambda.min")
+```
+
+LASSO regression selected a value of $\lambda = 2.611974$ which produced the lowest MSE value. This produced the equation: `Score` = 937.15693473 + 0.05984054`TotalXP` + 159.12937918`Eliminations` - 72.77820466`Deaths` + 0.94772672`Damage` - 361.57550500`XPTypeDouble XP + 10%` - 447.19199686`Win`.
+
+```{r}
+stepwise_model <- stepAIC(full_model, direction = "both")
+summary(stepwise_model)
+```
+
+Using step-wise selection, it produced the equation: `Score` = 944.05302 + 0.06054`TotalXP` + 185.24081`Eliminations` - 73.25104`Deaths` - 367.94000`XPTypeDouble XP + 10%` - 454.44701`Win`. We can see that the step-wise model removed the variable `Damage` while the LASSO regression did not. The coefficients of the variables for both models have the same sign and seem to be fairly close in value.
+
+## Task 2b. Regression Tree
+
+```{r}
+RegTree <- rpart(Score ~ TotalXP + Eliminations + Deaths + Damage + XPType + Win,
+                 method = "anova",
+                 data = CODGames2_mp_HC_TDM,
+                 minbucket = 3,
+                 control = rpart.control(minbucket = 15)
+)
+
+summary(RegTree)
+
+fancyRpartPlot(RegTree, cex = 1)
+
+RegTree$variable.importance
+```
+
+Based on the regression tree and using RegTree$variable.importance, we were able to get the values associated with each variable's importance with the three highest variable importance values being `Damage` (250835300), `Eliminations` (237532841), and `TotalXP` (64376422).
+
+## Task 2c. Standardized Model
+
+```{r}
+CODGames2_mp_HC_TDM_standardized <- CODGames2_mp_HC_TDM %>%
+  mutate(XPType = ifelse(XPType == "Double XP + 10%", 1, 0),
+         TotalXP = scale(TotalXP, center = TRUE, scale = TRUE),
+         Eliminations = scale(Eliminations, center = TRUE, scale = TRUE),
+         Deaths = scale(Deaths, center = TRUE, scale = TRUE),
+         XPType = scale(XPType, center = TRUE, scale = TRUE),
+         Win = scale(Win, center = TRUE, scale = TRUE)
+         )
+
+standardized_model <- lm(Score ~ TotalXP + Eliminations + Deaths + XPType + Win, data = CODGames2_mp_HC_TDM_standardized)
+summary(standardized_model)
+```
+
+Using the standardized model, it produced the estimated equation: `Score` = 3104.95 + 382.88`TotalXP` + 1030.92`Eliminations` - 276.49`Deaths` - 182.80`XPType` - 226.12`Win`. Based on the magnitude (absolute value) of the estimated coefficients, the three most important variables are `Eliminations` (1030.92), `TotalXP` (382.88), and `Deaths` (276.49).
+
+# Contribution
+Jackie Yang: Completed task1 and task2a and task2b and their comment
+
+Xinyu Xie: Completed task2c with comments and fixing some problems
