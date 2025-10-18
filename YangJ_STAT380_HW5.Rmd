@@ -1,0 +1,328 @@
+---
+title: "STAT380_HW5"
+author: Jackie Yang
+date: "Due: Finish before exam on Friday, February 28 - This HW will not be collected"
+output: html_document
+---
+
+## Instructions
+
+In class, we discussed the validation set approach for assessing and comparing the predictive ability of models using "new" data and covered the basics of k-Nearest Neighbors (kNN) regression models. The activities that follow are meant to provide further practice with these concepts. NOTE: All required `library` commands **must be** included in the Front Matter section. If you include your `library` commands elsewhere in your code, you will be penalized.
+
+At the conclusion to the activity, you do **NOT** need to upload any files since the answers will be provided in advance.
+
+## Learning Objectives
+This assignment address aspects of the following learning objectives.
+
+1. Students will be able to load datasets from R packages and external sources into the R environment.
+2. Students will be able to identify R functions for and perform data wrangling tasks such as filtering observations based on a criterion, creating new variables, and restructuring data.
+3.	Fit a linear regression model using statistical software, including situations involving polynomial terms, categorical predictions, and/or interaction terms
+4.	Interpret the output of a linear regression model, including coefficient estimates and quality of fit metrics.
+5.	Describe the k-nearest neighbors procedure for regression
+6.	Perform k-nearest neighbors regression using statistical software
+7.	Explain why cross validation techniques, such as a training/validation split, are used.
+8.	Compare the ability of competing models to generalize for new data.
+9.	Students will be able to explain the difference between the goals of prediction and inference.
+10.	Students will be able to explain the concept of overfitting and describe steps for avoiding it.
+11.	Students will be able to describe methods for assessing the closeness of predictions to the observed data.
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Front Matter - Clean Environment, Load Libraries, User Defined Functions
+
+```{r}
+rm(list = ls())
+#Add libraries as needed
+library(tidyverse)
+```
+
+```{r}
+library(FNN)
+NOVA <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/NOVA.csv")
+Ins <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/L02_Insurance_m.csv")
+```
+
+*Some questions on this assignment will mention a procedure called k-nearest neighbors (kNN). We will start this topic on February, February 21.*
+
+## Problem 1. (Question 3 that was removed from HW4) Housing Prices in Northern Virginia - Multiple Linear Regression
+
+*Details about the dataset may be found in HW4. You will have to repeat the data cleaning steps taken in Problem 1 of HW4 before doing this question.*
+
+#### a. Using `NOVA2`, which you created in Problem 1, build a regression model for `logPrice` using `Bathrooms` and the `Arlington` indicator. Display a summary of the model, and write the estimated regression equation.
+```{r}
+NOVA2 <- NOVA
+
+NOVA2 <- NOVA2 %>%
+  filter(CountySchool %in% c('ARLINGTON COUNTY PUBLIC SCHOOLS', 'FAIRFAX COUNTY PUBLIC SCHOOLS'), Price <= 3000000) %>%
+  mutate(logPrice = log(Price)) %>%
+  mutate(Single = ifelse(ListingType == 'Single Family', 1, 0), Arlington = ifelse(CountySchool == 'ARLINGTON COUNTY PUBLIC SCHOOLS', 1, 0))
+
+model2 <- lm(logPrice ~ Bathrooms + Arlington, data = NOVA2)
+summary(model2)
+```
+
+
+* HINT: I have provided code that you can modify for entering the equation.
+
+$$\hat{y}_i = 12.48 + 0.24x_{i,baths} + 0.48x_{i,Arlington}$$
+
+#### b. Explain the relationship between the number of bathrooms and `logPrice` after accounting for location (`Arlington`).
+
+This problem is asking to interpret the coefficient of `Bathrooms`. Here $\hat{\beta}_1 = 0.24$. For each additional bathroom, we expect the `logPrice` to increase by 0.24 log dollars, on average, assuming the location (county) is held constant. NOTE: This interpretation is difficult to understand since we do not think on the log scale.
+
+#### c. Interpret the coefficient (or slope) with `Arlington` in the context of the problem.
+This problem is asking to interpret the coefficient of `Arlington`. Here $\hat{\beta}_2 = 0.48$. To answer this, it is important to know what the "baseline" is. The baseline is the value of the `CountySchool` implied when the `Arlington` indicator is 0. So, `Arlington = 0` means that you are in Fairfax County. This plays a role in the interpretation below. As we go from Fairfax County to Arlington County (which means x goes form 0 to 1), we expect the `logPrice` to increase by 0.48 log dollars, on average, assuming the number of bathrooms is held constant.
+
+#### d. Report a 90\% confidence interval the coefficient (or slope) with `Bathrooms`.
+```{r}
+confint(model2, level = 0.9)
+```
+
+The 90% confidence interval for the coefficient of `Bathrooms` is given by (0.228, 0.250).
+
+#### e. What proportion of the total variation in `logPrice` is explained by the model using `Bathrooms` and `Arlington`?
+This problem is asking for $R^2 = 0.6519$
+
+#### f. What is the average amount by which the `logPrice` will deviate from the prediction made by the regression line?
+This problem is asking for the Residual Standard Error (RSE). RSE = 0.297.
+
+#### g. Report $R^2_{adj}$ for this model.
+$R_{adj}^2 = 0.6512$
+
+#### h. Of the 2 models (model from Problem 2 in HW4 containing bathrooms OR the model from this problem containg bathrooms and location indicator (`Arlington`)), which do you think we should use? Explain your reasoning.
+The model from this problem (whidh was originally Problem 2 on HW4) is better. It has better (higher) values for $R^2$ and $R_{adj}^2$, while having a better (lower) value of RSE. Thus, all of the metrics we have discussed so far suggests the model with `Bathrooms` and the location indicator (`Arlington`) is better than the model with `Bathrooms` only.
+
+## Problem 2. Conceptual Questions
+
+##### a.Explain why it is important to scale the input data ($X$'s) before performing kNN?
+The determination of the nearest neighbors is based on calculating the distance between the X values associated with two observations. If there are multiple X variables, the scale of the data can affect the distance calculations.
+
+For example, suppose that we are finding the nearest neighbors based on age and height. The size of the contribution to the distance based on height depends on how we measure height. Suppose we are comparing a person who is 5'3" (5 feet 3 inches) to a person who is 5'9". If height is measured in millimeters, the squared differences (e.g., $(1753 - 1600)^2$) will contribute more to the distance thatn if height is measured in meters (e.g., $(1.753 - 1.6)^2$). We avoid this by standardizing so that all variables are on the same scale (mean of 0, standard deviation of 1)
+
+##### b. Explain the validation set method (AKA the holdout set method). Your answer should include how we do it and why we do it.
+How we do it: We randomly split our dataset into two smaller datasets, which we call the training and validation datasets. To do this, we randomly select some percentage of the rows numbers. Those rows become the training data, which we will use to find/build/train the model. (In our case, that means estimating the regression line or finding the nearest neighbors up to this point). The rows that were not selected becom ethe validation set. Essentially, we hold these data points out and use them as an independent assessment of how well the model will work on new data.
+
+Why we do it: The reason that we use the validation (or holdout) set method is so taht we can see how well our model will generalize to new data. You can consider this as a method for independently evaluating how well you model can predict.
+
+##### c. Suppose you are predicting the price of a house in dollars. The validation set RMSE is 57000. Interpret this number.
+In general, the RMSE value for the validation set represents the average amount by which out prediction of the response differes from the observed/actual values of the response in the validation set (i.e. "new" data).
+
+In this problem, the validation set RMSE is 57000 dollars. This means that, on average, our predictions for the prices of hoses in the validation set were off by about \$57,000. It is hard to say whether that is good or not. If we are predicting prices for houses that cost a million dollars, an average error of around 5.7% might be good, but if we are predicting prices for a house with a value of \$100,000, then an error of more than 50% is poor.
+
+##### d. Explain what is meant by overfitting.
+Overfitting occurs when a statistical learning procedure is working too hard to find patterns in the dataset and begins to model the noise (random variations).
+
+##### e. When estimating regression models, we often have two goals: inference and prediction. What is the difference between these goals?
+When we are interested in inference, the goal is often to understand or describe relationships between the variables in your dataset. On the other hand, when the goal is prediction, we might not be interest in explaining the relationship. Instead, we might just be concerned with predictive accuracy. The goal of the analysis (inference or prediction) might influence the techniques that we employ.
+
+
+**For the remaining problems, use the following storyline**
+
+`L02_Insurance_m.csv` contains information about a number of health insurance policies. In particular, the data set contains some attributes of the policy holder (such as age, sex, etc.) and the total charges billed by the health care provider. Details about the variables included follow.
+
+* `age` - age of primary beneficiary
+* `sex` - sex of primary beneficiary
+* `bmi` - Body mass index, providing an understanding of body, weights that are relatively high or low relative to height, objective index of body weight (kg / m \^ 2) using the ratio of height to weight, ideally 18.5 to 24.9
+* `children` - Number of children covered by the health insurance policy (i.e., the number of dependents)
+* `smoker` - Status indicating whether the person is a smoker (options include 'yes' and 'no')
+* `region` - the beneficiary's residential area in the US (options include northeast, southeast, southwest, northwest).
+* `charges` - Individual medical costs as billed by health insurance
+
+Our goal is to predict `charges` using `age`, `sex`, `bmi`, `children`, and smoking status (`smoker`).
+
+## Problem 3. Insurance Charges - Data Preparation
+
+##### a. Remove any observations with missing data. (After doing so, you should have 1337 remaining observations.)
+```{r}
+Ins <- na.omit(Ins)
+```
+
+
+##### b. For k-nearest neighbors, we will need to convert `smoker` and `sex` from being categorical to indicator variables (i.e., 0/1 variables) so that we can compute distances for kNN. (Unlike the `lm()` function which does this for us, the `knn.reg()` function cannot handle categorical variables.) We can also use the indicator variable in our regression model. Create an indicator variable called `smokes` according to the rule that `smokes` is 1 if smoker is ‘yes’ and `smokes` is 0 otherwise. Create an appropriate indicator for `sex` as well.
+```{r}
+Ins <- Ins %>%
+  mutate(smokes = ifelse(smoker == 'yes', 1, 0),
+         male = ifelse(sex == 'male', 1, 0))
+```
+
+
+##### c. Standardize the inputs so that each has a mean of 0 and a standard deviation of 1. Moving forward, these will be called the scaled inputs. NOTE: Recall that the inputs are the x variables (INCLUDING indicators) and do not include the response variable. Do **NOT** scale the response (y).
+
+NOTE: Code for scaling/standardizing the data can be found at the end of Example 3 Part a (top of page 5) in the Lecture 9 packet. In particular, the code for scaling includes creating a vector named `xvars` that holds the names of the x variables. I then used these to reference the columns of `Ins` when scaling/standardizing.
+
+```{r}
+xvars <- c('age', 'male', 'bmi', 'children', 'smokes')
+Ins[ , xvars] <- scale(Ins[ , xvars], center = TRUE, scale = TRUE)
+```
+
+
+##### d. Perform an 80/20 training/validation split using the method presented in class and a seed of 123. We will use the validation set approach to assess how well competing models are able to generalize to "new" data. 
+
+- NOTE: The current version of R (which is different from RStudio) is 4.4.2. If your version of R is \< 3.6.0, your should either update R or run your .Rmd file on a lab computer that has a version \>= 3.6.0. Failure to follow this instruction will make your remaining answers incorrect.
+
+```{r}
+set.seed(123)
+train_ind <- sample(1:nrow(Ins), floor(0.8*nrow(Ins)))
+set.seed(NULL)
+
+Train <- Ins[train_ind, ]
+Validation <- Ins[-train_ind, ]
+```
+
+
+## Problem 4. Medical Charges - Model Building 
+
+We wish to compare two models (multiple linear regression and *k*-nearest neighbors) for predicting `charges` using `age`, `sex`, `bmi`, `children`, and smoking status (`smoker`). Using the scaled inputs created in Problem 3, we will build the models and compare their ability to generalize to new data using the RMSE.
+
+##### a. Build a multiple linear regression model for predicting `charges` that includes all scaled inputs. Then, calculate the RMSE of the predictions for the "new" data. NOTE: You should know whether you are building this model using the full dataset, the training set, or the validation set. Similarly, you should know whether we are calculating RMSE based on the full dataset, the training set, or the validation set.
+
+```{r}
+reg_model1 <- lm(charges ~ age + male + bmi + children + smokes, data = Train)
+yhat1 <- predict(reg_model1, newdata = Validation)
+rmse_lm <- sqrt(mean((Validation$charges - yhat1)^2))
+rmse_lm
+```
+
+
+##### b. Build a kNN model for predicting `charges` that includes the scaled inputs using $k = 20$ nearest neighbors. Then, report the RMSE of the predictions for the "new" data.
+
+```{r}
+knn_res <- knn.reg(train = Train[ , xvars, drop = FALSE],
+                   test = Validation[ , xvars, drop = FALSE],
+                   y = Train$charges,
+                   k = 20)
+
+rmse_knn20 <- sqrt(mean((Validation$charges - knn_res$pred)^2))
+rmse_knn20
+```
+
+The RMSE for the kNN regression model based on 20 nearest neighbors is found to be $4436.30.
+
+- NOTE: Code for this can be found in Example 3 Part b on page 5 of the Lecture 9 notes.
+
+##### c. Interpret the RMSE values found in a. and b.
+The RMSE values represent the average amount of money by which our prediction of the mdeical charges differed from the observed/actual medical charges for the observations in the Validation dataset. We can think of this as the average residual for the validation data OR as an estimate of the average residuals for the testing data.
+
+So, the linear model's prediction of charges was off by about \$5542, on average, while the kNN model's prediction was off by \$4436, on average. 
+
+##### d. Which model (multiple linear regression or kNN) is preferred? Explain your reasoning.
+Based on the training/validation split that we used, the kNN regression model is preferred since the average error ($4436) was much lower than that of the multiple linear regression model (5542).
+
+## Problem 5. Medical Charges - Random Inference Question
+
+##### a. How does `bmi` affect `charges` when controlling for `age` and smoking status? To answer this, build a multiple linear regression model for predicting charges using `age`, `bmi`, and `smokes` using the full dataset (not the Train). Do **not** standardize the inputs. Then, interpret the slope associated with `bmi`.
+
+- NOTE: When we use the phrase "controlling for age and smoking status", this means that we want to account for the variables and plan to include them as inputs (x's); however, we are not interested in making inferences about the relationship between age and smoking status and the response (y).
+
+- NOTE: It may be helpful to read the Insurance dataset in and start over since you may have scaled/standardized these variables. Reread the original dataset and do the data cleaning again (remove NA's, create new variables, etc.)
+
+```{r}
+Ins <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/L02_Insurance_m.csv")
+
+Ins <- na.omit(Ins)
+
+Ins <- Ins %>%
+  mutate(smokes = ifelse(smoker == 'yes', 1, 0),
+         male = ifelse(sex == 'male', 1,0))
+
+model_6 <- lm(charges ~ age + bmi + smokes, data = Ins)
+summary(model_6)
+```
+
+As shown in the output above, the estimated coefficient for bmi is given by $\hat{\beta}_{i, bmi}$ = 322.0215758. This means that for every one-unit increase in BMI, we expect the charges to increase by $322.02, on average, provided the variables `age` and `smokes` are held constant.
+
+Another way of saying this: When controlling for age and smokine status, we expect charges to increase by $322.02, on average, for each additional point in BMI.
+
+##### b. How does smoking status affect `charges` when controlling for `age` and `bmi`? To answer this, build a multiple linear regression model for predicting charges using `age`, `bmi`, and `smokes` using the full dataset (not the Train). Do **not** standardize the inputs. Then, interpret the slope associated with `smokes`.
+We can use the same model output from Problem 5 Part a. to answer this. The part of this question that is a little bit tricky is that `smokes` is an indicator. Since it only takes values of 0 and 1, there is onyl one wat to discuss a 1-unit increase in `smokes`. A 1-unit increase means that we go from 0 (does not smoke) to 1 (does smoke).
+
+One interpretation: We expect the charges to increase by $2.380354^4$, on average, for smokers relative to non-smokers provided the variables `age` and `bmi` are held constant.
+
+Alternative interpretation: For people of the same age with the same bmi, we expect the charges to be $2.380354^4$ higher, on average, for smokers than for non-smokers.
+
+## Problem 6. Medical Charges - Impact of scaling on multiple linear regression.
+
+Suppose we want to build a multiple linear regression model for predicting `charges` using `age`, `sex`, `bmi`, `children`, and smoking status. Suppose we are going to use an 80/20 training/validation split with a seed of 123. For each of the following, state whether the value of the item changes based on whether you used the scaled or unscaled input (x) data.
+
+```{r}
+Ins <- read.csv("C:/ESSENTIALS/School OS/Junior Spring 2025/STAT 380/Datasets/L02_Insurance_m.csv")
+
+Ins <- na.omit(Ins)
+
+Ins <- Ins %>%
+  mutate(smokes = ifelse(smoker == 'yes', 1, 0),
+         male = ifelse(sex == 'male', 1, 0))
+
+set.seed(123)
+train_ind <- sample(1 :nrow(Ins), floor(0.8*nrow(Ins)))
+set.seed(NULL)
+
+TrainUnscaled <- Ins[train_ind, ]
+ValidationUnscaled <- Ins[-train_ind, ]
+
+Ins[ , xvars] <- scale(Ins[ , xvars], center = TRUE, scale = TRUE)
+
+TrainScaled <- Ins[train_ind, ]
+ValidationScaled <- Ins[-train_ind, ]
+
+modelUnscaled <- lm(charges ~ age + male + bmi + children + smokes, data = TrainUnscaled)
+yhatUnscaled <- predict(modelUnscaled, newdata = ValidationUnscaled)
+rmseUnscaled <- sqrt(mean((ValidationUnscaled$charges - yhatUnscaled)^2))
+
+modelScaled <- lm(charges ~ age + male + bmi + children + smokes, data = TrainScaled)
+yhatScaled <- predict(modelScaled, newdata = ValidationScaled)
+rmseScaled <- sqrt(mean((ValidationScaled$charges - yhatScaled)^2))
+```
+
+
+##### a. $R^2$
+```{r}
+summary(modelScaled)$r.squared
+summary(modelUnscaled)$r.squared
+```
+
+Value does not change
+
+##### b. $R^2_{adj}$
+```{r}
+summary(modelScaled)$adj.r.squared
+summary(modelUnscaled)$adj.r.squared
+```
+
+Value does not change
+
+##### c. Estimated regression line
+```{r}
+modelScaled$coefficients
+modelUnscaled$coefficients
+```
+
+Values do change (as would the interpretations)
+
+##### d. Residual Standard Error
+```{r}
+summary(modelScaled)$sigma
+summary(modelUnscaled)$sigma
+```
+
+Value does not change
+
+##### e. Predictived values for the Validation data
+```{r}
+head(yhatScaled, 10)
+head(yhatUnscaled, 10)
+```
+
+Value does not change
+
+##### f. Validation set RMSE
+```{r}
+rmseScaled
+rmseUnscaled
+```
+
+Value does not change
